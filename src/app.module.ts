@@ -5,6 +5,9 @@ import { DatabaseModule } from './common/database/database.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { TenantModule } from './modules/tenant/tenant.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ProductsModule } from './modules/products/products.module';
+import { WarehousesModule } from './modules/warehouses/warehouses.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
@@ -19,6 +22,9 @@ import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
     AuditModule,
     TenantModule,
     AuthModule,
+    ProductsModule,
+    WarehousesModule,
+    InventoryModule,
   ],
   providers: [
     {

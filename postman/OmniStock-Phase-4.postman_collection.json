@@ -1,0 +1,2134 @@
+{
+  "info": {
+    "_postman_id": "8b9a1e0c-3d4f-4a67-b521-8f90c1234567",
+    "name": "OmniStock Phase 4 - Catalog, Warehouses, Inventory & Transfers",
+    "description": "Comprehensive Postman smoke test collection for OmniStock MVP Phase 4 (User Story 2: Accurate Inventory Tracking & Movements). Covers Categories, Products & Variants, Barcode Uniqueness, Warehouses & Allocation Priority, Inventory Adjustments & Stock Movement Ledger, Low-Stock Thresholds & Alerts Lifecycle, Inter-Warehouse Stock Transfers (DRAFT -> IN_TRANSIT -> RECEIVED / CANCELLED), and Cross-Tenant Isolation.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Setup & Auth",
+      "item": [
+        {
+          "name": "01 - Onboard Phase 4 Test Tenant",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('phase4TenantSlug', 'p4-smoke-' + ts);",
+                  "pm.environment.set('phase4AdminEmail', 'admin-p4-' + ts + '@smoke.com');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Tenant created with admin', function () {",
+                  "    pm.expect(jsonData.tenant).to.be.an('object');",
+                  "    pm.expect(jsonData.tenant.id).to.be.a('string');",
+                  "    pm.expect(jsonData.admin_user).to.be.an('object');",
+                  "    pm.expect(jsonData.admin_user.password_hash).to.be.undefined;",
+                  "});",
+                  "pm.environment.set('phase4TenantId', jsonData.tenant.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Phase 4 Smoke Tenant\",\n  \"slug\": \"{{phase4TenantSlug}}\",\n  \"admin_email\": \"{{phase4AdminEmail}}\",\n  \"admin_password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants"]
+            }
+          }
+        },
+        {
+          "name": "02 - Login as Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Admin JWT token obtained', function () {",
+                  "    pm.expect(jsonData.access_token).to.be.a('string');",
+                  "    pm.expect(jsonData.user.role).to.eql('ADMIN');",
+                  "});",
+                  "pm.environment.set('phase4AdminToken', jsonData.access_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_slug\": \"{{phase4TenantSlug}}\",\n  \"email\": \"{{phase4AdminEmail}}\",\n  \"password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Categories",
+      "item": [
+        {
+          "name": "03 - Create Category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Category created with correct fields', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.name).to.eql('Electronics');",
+                  "    pm.expect(jsonData.description).to.eql('Consumer electronics and devices');",
+                  "});",
+                  "pm.environment.set('phase4CategoryId', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Electronics\",\n  \"description\": \"Consumer electronics and devices\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["categories"]
+            }
+          }
+        },
+        {
+          "name": "04 - List Categories",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Returns list containing created category', function () {",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "    const found = jsonData.find(c => c.id === pm.environment.get('phase4CategoryId'));",
+                  "    pm.expect(found).to.be.an('object');",
+                  "    pm.expect(found.name).to.eql('Electronics');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["categories"]
+            }
+          }
+        },
+        {
+          "name": "05 - Update Category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Category updated description', function () {",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get('phase4CategoryId'));",
+                  "    pm.expect(jsonData.description).to.eql('Updated devices and gadgets');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated devices and gadgets\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{phase4CategoryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["categories", "{{phase4CategoryId}}"]
+            }
+          }
+        },
+        {
+          "name": "06 - Negative: Duplicate Category Name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is DUPLICATE_CATEGORY_NAME', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('DUPLICATE_CATEGORY_NAME');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"electronics\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["categories"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Products & Variants",
+      "item": [
+        {
+          "name": "07 - Create Standalone Product",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('standaloneSku', 'SKU-STD-' + ts);",
+                  "pm.environment.set('standaloneBarcode', 'BAR-STD-' + ts);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Standalone product created', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.sku).to.eql(pm.environment.get('standaloneSku'));",
+                  "    pm.expect(jsonData.is_variant_parent).to.eql(false);",
+                  "    pm.expect(Number(jsonData.price)).to.eql(149.99);",
+                  "});",
+                  "pm.environment.set('phase4StandaloneProductId', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{standaloneSku}}\",\n  \"barcode\": \"{{standaloneBarcode}}\",\n  \"name\": \"Wireless Headphones\",\n  \"category_id\": \"{{phase4CategoryId}}\",\n  \"price\": 149.99,\n  \"is_variant_parent\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"]
+            }
+          }
+        },
+        {
+          "name": "08 - Create Variant Parent Container Product",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('parentSku', 'PARENT-TSHIRT-' + ts);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Variant parent product created', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.is_variant_parent).to.eql(true);",
+                  "    pm.expect(jsonData.parent_product_id).to.be.null;",
+                  "});",
+                  "pm.environment.set('phase4ParentProductId', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{parentSku}}\",\n  \"name\": \"Classic T-Shirt Master\",\n  \"category_id\": \"{{phase4CategoryId}}\",\n  \"price\": 25.00,\n  \"is_variant_parent\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"]
+            }
+          }
+        },
+        {
+          "name": "09 - Create Child Variant SKU",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('childSku', 'TSHIRT-RED-L-' + ts);",
+                  "pm.environment.set('childBarcode', 'BAR-RED-L-' + ts);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Child variant SKU created under parent', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.parent_product_id).to.eql(pm.environment.get('phase4ParentProductId'));",
+                  "    pm.expect(jsonData.is_variant_parent).to.eql(false);",
+                  "    pm.expect(jsonData.variant_attributes).to.be.an('object');",
+                  "    pm.expect(jsonData.variant_attributes.color).to.eql('Red');",
+                  "});",
+                  "pm.environment.set('phase4ChildVariantId', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{childSku}}\",\n  \"barcode\": \"{{childBarcode}}\",\n  \"name\": \"Classic T-Shirt Red Large\",\n  \"parent_product_id\": \"{{phase4ParentProductId}}\",\n  \"variant_attributes\": { \"color\": \"Red\", \"size\": \"L\" },\n  \"price\": 25.00,\n  \"is_variant_parent\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"]
+            }
+          }
+        },
+        {
+          "name": "10 - Get Parent Product with Child Variants Array",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Parent includes variants array', function () {",
+                  "    pm.expect(jsonData.is_variant_parent).to.eql(true);",
+                  "    pm.expect(jsonData.variants).to.be.an('array');",
+                  "    pm.expect(jsonData.variants.length).to.be.at.least(1);",
+                  "    pm.expect(jsonData.variants[0].id).to.eql(pm.environment.get('phase4ChildVariantId'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{phase4ParentProductId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{phase4ParentProductId}}"]
+            }
+          }
+        },
+        {
+          "name": "11 - Negative: Duplicate Product SKU",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is DUPLICATE_PRODUCT_SKU', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('DUPLICATE_PRODUCT_SKU');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{standaloneSku}}\",\n  \"name\": \"Duplicate SKU Product\",\n  \"price\": 50.00\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"]
+            }
+          }
+        },
+        {
+          "name": "12 - Negative: Duplicate Non-Null Barcode",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is DUPLICATE_PRODUCT_BARCODE', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('DUPLICATE_PRODUCT_BARCODE');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"UNIQUE-SKU-BAR-COLLIDE\",\n  \"barcode\": \"{{childBarcode}}\",\n  \"name\": \"Barcode Collision Product\",\n  \"price\": 50.00\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"]
+            }
+          }
+        },
+        {
+          "name": "13 - Negative: Multi-Level Variant Nesting",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is VALIDATION_ERROR', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"MULTI-NEST-SKU\",\n  \"name\": \"Multi-level Container\",\n  \"parent_product_id\": \"{{phase4ParentProductId}}\",\n  \"is_variant_parent\": true,\n  \"price\": 20.00\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"]
+            }
+          }
+        },
+        {
+          "name": "14 - Negative: Negative Product Price",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is VALIDATION_ERROR', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"NEG-PRICE-SKU\",\n  \"name\": \"Negative Price Product\",\n  \"price\": -5.00\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Warehouses",
+      "item": [
+        {
+          "name": "15 - Create Warehouse 1 (Priority 1)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('wh1Name', 'Riyadh Primary Hub ' + ts);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Warehouse 1 created with priority 1', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.priority).to.eql(1);",
+                  "    pm.expect(jsonData.is_active).to.eql(true);",
+                  "});",
+                  "pm.environment.set('phase4Wh1Id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{wh1Name}}\",\n  \"location\": \"Riyadh\",\n  \"priority\": 1,\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/warehouses",
+              "host": ["{{baseUrl}}"],
+              "path": ["warehouses"]
+            }
+          }
+        },
+        {
+          "name": "16 - Create Warehouse 2 (Priority 2)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('wh2Name', 'Jeddah Secondary Hub ' + ts);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Warehouse 2 created with priority 2', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.priority).to.eql(2);",
+                  "});",
+                  "pm.environment.set('phase4Wh2Id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{wh2Name}}\",\n  \"location\": \"Jeddah\",\n  \"priority\": 2,\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/warehouses",
+              "host": ["{{baseUrl}}"],
+              "path": ["warehouses"]
+            }
+          }
+        },
+        {
+          "name": "17 - List Warehouses (Ordered by Priority)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Warehouses sorted by priority ascending', function () {",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "    pm.expect(jsonData.length).to.be.at.least(2);",
+                  "    pm.expect(jsonData[0].priority).to.be.at.most(jsonData[1].priority);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/warehouses",
+              "host": ["{{baseUrl}}"],
+              "path": ["warehouses"]
+            }
+          }
+        },
+        {
+          "name": "18 - Negative: Duplicate Warehouse Name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is DUPLICATE_WAREHOUSE_NAME', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('DUPLICATE_WAREHOUSE_NAME');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{wh1Name}}\",\n  \"priority\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/warehouses",
+              "host": ["{{baseUrl}}"],
+              "path": ["warehouses"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Inventory Stock & Movements",
+      "item": [
+        {
+          "name": "19 - Negative: Stock Adjustment on Variant Parent Container",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is VARIANT_PARENT_NOT_SELLABLE', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('VARIANT_PARENT_NOT_SELLABLE');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{phase4ParentProductId}}\",\n  \"warehouse_id\": \"{{phase4Wh1Id}}\",\n  \"delta\": 10,\n  \"reason\": \"Invalid Parent Stock\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "adjust"]
+            }
+          }
+        },
+        {
+          "name": "20 - Negative: Stock Adjustment Delta Zero",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is VALIDATION_ERROR', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{phase4StandaloneProductId}}\",\n  \"warehouse_id\": \"{{phase4Wh1Id}}\",\n  \"delta\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "adjust"]
+            }
+          }
+        },
+        {
+          "name": "21 - Stock Adjustment (+30 Units Intake)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Stock levels updated correctly', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.on_hand).to.eql(30);",
+                  "    pm.expect(jsonData.reserved).to.eql(0);",
+                  "    pm.expect(jsonData.available).to.eql(30);",
+                  "    pm.expect(jsonData.in_transit).to.eql(0);",
+                  "});",
+                  "pm.environment.set('phase4InventoryItemId', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{phase4StandaloneProductId}}\",\n  \"warehouse_id\": \"{{phase4Wh1Id}}\",\n  \"delta\": 30,\n  \"reason\": \"Initial warehouse restock\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "adjust"]
+            }
+          }
+        },
+        {
+          "name": "22 - Negative: Insufficient Stock Adjustment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is INSUFFICIENT_STOCK', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('INSUFFICIENT_STOCK');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{phase4StandaloneProductId}}\",\n  \"warehouse_id\": \"{{phase4Wh1Id}}\",\n  \"delta\": -50,\n  \"reason\": \"Over-deduction\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "adjust"]
+            }
+          }
+        },
+        {
+          "name": "23 - Retrieve Inventory Levels",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Inventory levels match formula: available = on_hand - reserved', function () {",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "    const item = jsonData.data.find(i => i.id === pm.environment.get('phase4InventoryItemId'));",
+                  "    pm.expect(item).to.be.an('object');",
+                  "    pm.expect(item.on_hand).to.eql(30);",
+                  "    pm.expect(item.reserved).to.eql(0);",
+                  "    pm.expect(item.available).to.eql(item.on_hand - item.reserved);",
+                  "    pm.expect(item.in_transit).to.eql(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/levels?product_id={{phase4StandaloneProductId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "levels"],
+              "query": [
+                {
+                  "key": "product_id",
+                  "value": "{{phase4StandaloneProductId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "24 - Retrieve Stock Movements Ledger",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('StockMovement record exists with type ADJUSTMENT and delta 30', function () {",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "    pm.expect(jsonData.data.length).to.be.at.least(1);",
+                  "    const mov = jsonData.data[0];",
+                  "    pm.expect(mov.type).to.eql('ADJUSTMENT');",
+                  "    pm.expect(mov.delta).to.eql(30);",
+                  "    pm.expect(mov.product_id).to.eql(pm.environment.get('phase4StandaloneProductId'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/movements?product_id={{phase4StandaloneProductId}}&type=ADJUSTMENT",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "movements"],
+              "query": [
+                {
+                  "key": "product_id",
+                  "value": "{{phase4StandaloneProductId}}"
+                },
+                {
+                  "key": "type",
+                  "value": "ADJUSTMENT"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "25 - Reserved Movement Type RETURN Yields Empty List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('RETURN movement type returns 0 items in MVP', function () {",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "    pm.expect(jsonData.data).to.have.lengthOf(0);",
+                  "    pm.expect(jsonData.total).to.eql(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/movements?type=RETURN",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "movements"],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "RETURN"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Low-Stock Alerts Lifecycle",
+      "item": [
+        {
+          "name": "26 - Configure Threshold = 15 on InventoryItem",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('low_stock_threshold set to 15', function () {",
+                  "    pm.expect(jsonData.low_stock_threshold).to.eql(15);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"low_stock_threshold\": 15\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/items/{{phase4InventoryItemId}}/threshold",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "items", "{{phase4InventoryItemId}}", "threshold"]
+            }
+          }
+        },
+        {
+          "name": "27 - Deduct Stock to 10 (Triggers OPEN Alert)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('on_hand decreased to 10', function () {",
+                  "    pm.expect(jsonData.on_hand).to.eql(10);",
+                  "    pm.expect(jsonData.available).to.eql(10);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{phase4StandaloneProductId}}\",\n  \"warehouse_id\": \"{{phase4Wh1Id}}\",\n  \"delta\": -20,\n  \"reason\": \"Simulate heavy sales\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "adjust"]
+            }
+          }
+        },
+        {
+          "name": "28 - Retrieve OPEN Low-Stock Alert",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Exactly 1 OPEN alert exists with current_available = 10', function () {",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "    pm.expect(jsonData.data.length).to.be.at.least(1);",
+                  "    const alert = jsonData.data.find(a => a.inventory_item_id === pm.environment.get('phase4InventoryItemId'));",
+                  "    pm.expect(alert).to.be.an('object');",
+                  "    pm.expect(alert.status).to.eql('OPEN');",
+                  "    pm.expect(alert.threshold).to.eql(15);",
+                  "    pm.expect(alert.current_available).to.eql(10);",
+                  "    pm.expect(alert.resolved_at).to.be.null;",
+                  "    pm.environment.set('phase4AlertId', alert.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/low-stock?status=OPEN&product_id={{phase4StandaloneProductId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts", "low-stock"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "OPEN"
+                },
+                {
+                  "key": "product_id",
+                  "value": "{{phase4StandaloneProductId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "29 - Retrieve Single Low-Stock Alert by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Alert matches ID and tenant', function () {",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get('phase4AlertId'));",
+                  "    pm.expect(jsonData.tenant_id).to.eql(pm.environment.get('phase4TenantId'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/low-stock/{{phase4AlertId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts", "low-stock", "{{phase4AlertId}}"]
+            }
+          }
+        },
+        {
+          "name": "30 - Deduct Further Stock (Assert Alert Deduplication)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{phase4StandaloneProductId}}\",\n  \"warehouse_id\": \"{{phase4Wh1Id}}\",\n  \"delta\": -3,\n  \"reason\": \"Further stock drop\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "adjust"]
+            }
+          }
+        },
+        {
+          "name": "31 - Verify Alert Deduplication (Same Alert ID, Updated Available)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Alert deduplicated without creating second OPEN alert', function () {",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "    const matching = jsonData.data.filter(a => a.inventory_item_id === pm.environment.get('phase4InventoryItemId'));",
+                  "    pm.expect(matching).to.have.lengthOf(1);",
+                  "    pm.expect(matching[0].id).to.eql(pm.environment.get('phase4AlertId'));",
+                  "    pm.expect(matching[0].current_available).to.eql(7);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/low-stock?status=OPEN&product_id={{phase4StandaloneProductId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts", "low-stock"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "OPEN"
+                },
+                {
+                  "key": "product_id",
+                  "value": "{{phase4StandaloneProductId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "32 - Replenish Stock to 27 Units (Auto-Resolves Alert)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Stock replenished to 27', function () {",
+                  "    pm.expect(jsonData.on_hand).to.eql(27);",
+                  "    pm.expect(jsonData.available).to.eql(27);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{phase4StandaloneProductId}}\",\n  \"warehouse_id\": \"{{phase4Wh1Id}}\",\n  \"delta\": 20,\n  \"reason\": \"Replenishment delivery\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "adjust"]
+            }
+          }
+        },
+        {
+          "name": "33 - Verify Alert Transitioned to RESOLVED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Alert is now RESOLVED with non-null resolved_at', function () {",
+                  "    pm.expect(jsonData.status).to.eql('RESOLVED');",
+                  "    pm.expect(jsonData.resolved_at).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/low-stock/{{phase4AlertId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts", "low-stock", "{{phase4AlertId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Inter-Warehouse Stock Transfers",
+      "item": [
+        {
+          "name": "34 - Create Stock Transfer Draft (10 Units WH1 -> WH2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Transfer created in status DRAFT', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.status).to.eql('DRAFT');",
+                  "    pm.expect(jsonData.source_warehouse_id).to.eql(pm.environment.get('phase4Wh1Id'));",
+                  "    pm.expect(jsonData.destination_warehouse_id).to.eql(pm.environment.get('phase4Wh2Id'));",
+                  "    pm.expect(jsonData.items).to.be.an('array');",
+                  "    pm.expect(jsonData.items).to.have.lengthOf(1);",
+                  "    pm.expect(jsonData.items[0].quantity).to.eql(10);",
+                  "});",
+                  "pm.environment.set('phase4TransferId', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_warehouse_id\": \"{{phase4Wh1Id}}\",\n  \"destination_warehouse_id\": \"{{phase4Wh2Id}}\",\n  \"notes\": \"Replenish Jeddah Hub\",\n  \"items\": [\n    {\n      \"product_id\": \"{{phase4StandaloneProductId}}\",\n      \"quantity\": 10\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transfers",
+              "host": ["{{baseUrl}}"],
+              "path": ["transfers"]
+            }
+          }
+        },
+        {
+          "name": "35 - Negative: Same Source and Destination Warehouse",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is VALIDATION_ERROR', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_warehouse_id\": \"{{phase4Wh1Id}}\",\n  \"destination_warehouse_id\": \"{{phase4Wh1Id}}\",\n  \"items\": [\n    {\n      \"product_id\": \"{{phase4StandaloneProductId}}\",\n      \"quantity\": 5\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transfers",
+              "host": ["{{baseUrl}}"],
+              "path": ["transfers"]
+            }
+          }
+        },
+        {
+          "name": "36 - Dispatch Transfer (DRAFT -> IN_TRANSIT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Transfer status transitioned to IN_TRANSIT', function () {",
+                  "    pm.expect(jsonData.status).to.eql('IN_TRANSIT');",
+                  "    pm.expect(jsonData.dispatched_at).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transfers/{{phase4TransferId}}/dispatch",
+              "host": ["{{baseUrl}}"],
+              "path": ["transfers", "{{phase4TransferId}}", "dispatch"]
+            }
+          }
+        },
+        {
+          "name": "37 - Verify Stock Post-Dispatch (Source on_hand -10, Dest in_transit +10)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Source on_hand decreased by 10; Dest in_transit increased by 10', function () {",
+                  "    const src = jsonData.data.find(i => i.warehouse_id === pm.environment.get('phase4Wh1Id'));",
+                  "    const dest = jsonData.data.find(i => i.warehouse_id === pm.environment.get('phase4Wh2Id'));",
+                  "    pm.expect(src).to.be.an('object');",
+                  "    pm.expect(src.on_hand).to.eql(17);",
+                  "    pm.expect(src.available).to.eql(17);",
+                  "    pm.expect(dest).to.be.an('object');",
+                  "    pm.expect(dest.in_transit).to.eql(10);",
+                  "    pm.expect(dest.on_hand).to.eql(0);",
+                  "    pm.expect(dest.available).to.eql(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/levels?product_id={{phase4StandaloneProductId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "levels"],
+              "query": [
+                {
+                  "key": "product_id",
+                  "value": "{{phase4StandaloneProductId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "38 - Negative: Repeated Dispatch on IN_TRANSIT Transfer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is INVALID_TRANSFER_TRANSITION', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('INVALID_TRANSFER_TRANSITION');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transfers/{{phase4TransferId}}/dispatch",
+              "host": ["{{baseUrl}}"],
+              "path": ["transfers", "{{phase4TransferId}}", "dispatch"]
+            }
+          }
+        },
+        {
+          "name": "39 - Negative: Cancel IN_TRANSIT Transfer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is INVALID_TRANSFER_TRANSITION', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('INVALID_TRANSFER_TRANSITION');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transfers/{{phase4TransferId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["transfers", "{{phase4TransferId}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "40 - Receive Transfer (IN_TRANSIT -> RECEIVED)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Transfer status transitioned to RECEIVED', function () {",
+                  "    pm.expect(jsonData.status).to.eql('RECEIVED');",
+                  "    pm.expect(jsonData.received_at).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transfers/{{phase4TransferId}}/receive",
+              "host": ["{{baseUrl}}"],
+              "path": ["transfers", "{{phase4TransferId}}", "receive"]
+            }
+          }
+        },
+        {
+          "name": "41 - Verify Stock Post-Receipt (Dest on_hand = 10, in_transit = 0)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Destination on_hand is 10 and in_transit is 0', function () {",
+                  "    const dest = jsonData.data.find(i => i.warehouse_id === pm.environment.get('phase4Wh2Id'));",
+                  "    pm.expect(dest).to.be.an('object');",
+                  "    pm.expect(dest.in_transit).to.eql(0);",
+                  "    pm.expect(dest.on_hand).to.eql(10);",
+                  "    pm.expect(dest.available).to.eql(10);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/levels?product_id={{phase4StandaloneProductId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "levels"],
+              "query": [
+                {
+                  "key": "product_id",
+                  "value": "{{phase4StandaloneProductId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "42 - Negative: Repeated Receive on RECEIVED Transfer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is INVALID_TRANSFER_TRANSITION', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('INVALID_TRANSFER_TRANSITION');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transfers/{{phase4TransferId}}/receive",
+              "host": ["{{baseUrl}}"],
+              "path": ["transfers", "{{phase4TransferId}}", "receive"]
+            }
+          }
+        },
+        {
+          "name": "43 - Create and Cancel DRAFT Transfer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('phase4CancelTransferId', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_warehouse_id\": \"{{phase4Wh1Id}}\",\n  \"destination_warehouse_id\": \"{{phase4Wh2Id}}\",\n  \"notes\": \"To be cancelled\",\n  \"items\": [\n    {\n      \"product_id\": \"{{phase4StandaloneProductId}}\",\n      \"quantity\": 2\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transfers",
+              "host": ["{{baseUrl}}"],
+              "path": ["transfers"]
+            }
+          }
+        },
+        {
+          "name": "44 - Cancel DRAFT Transfer (DRAFT -> CANCELLED)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Transfer cancelled successfully', function () {",
+                  "    pm.expect(jsonData.status).to.eql('CANCELLED');",
+                  "    pm.expect(jsonData.cancelled_at).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transfers/{{phase4CancelTransferId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["transfers", "{{phase4CancelTransferId}}", "cancel"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Cross-Tenant Isolation",
+      "item": [
+        {
+          "name": "45 - Onboard Tenant 2",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('phase4Tenant2Slug', 'p4-t2-' + ts);",
+                  "pm.environment.set('phase4Tenant2AdminEmail', 'admin-p4-t2-' + ts + '@smoke.com');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('phase4Tenant2Id', jsonData.tenant.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Phase 4 Tenant 2\",\n  \"slug\": \"{{phase4Tenant2Slug}}\",\n  \"admin_email\": \"{{phase4Tenant2AdminEmail}}\",\n  \"admin_password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants"]
+            }
+          }
+        },
+        {
+          "name": "46 - Login Tenant 2 Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('phase4Tenant2AdminToken', jsonData.access_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_slug\": \"{{phase4Tenant2Slug}}\",\n  \"email\": \"{{phase4Tenant2AdminEmail}}\",\n  \"password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "47 - Isolation: Tenant 2 Cannot Read Tenant 1 Product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is PRODUCT_NOT_FOUND', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('PRODUCT_NOT_FOUND');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4Tenant2AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{phase4StandaloneProductId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{phase4StandaloneProductId}}"]
+            }
+          }
+        },
+        {
+          "name": "48 - Isolation: Tenant 2 Cannot Read Tenant 1 Transfer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is TRANSFER_NOT_FOUND', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('TRANSFER_NOT_FOUND');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4Tenant2AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transfers/{{phase4TransferId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["transfers", "{{phase4TransferId}}"]
+            }
+          }
+        },
+        {
+          "name": "49 - Isolation: Tenant 2 Cannot Read Tenant 1 Alert",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is ALERT_NOT_FOUND', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('ALERT_NOT_FOUND');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase4Tenant2AdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/low-stock/{{phase4AlertId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts", "low-stock", "{{phase4AlertId}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+
