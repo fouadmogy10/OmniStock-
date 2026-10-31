@@ -119,8 +119,15 @@ export function validateEnv(config: Record<string, any>): EnvConfig {
     throw new Error('WEBHOOK_SECRET_ENCRYPTION_KEYS environment variable is missing or empty');
   }
 
+  const trimmedKeyring = encryptionKeysRaw.trim();
+  if (trimmedKeyring.startsWith('{') || trimmedKeyring.startsWith('[')) {
+    throw new Error(
+      `Invalid format in WEBHOOK_SECRET_ENCRYPTION_KEYS. Keyring must use the canonical '<version>:<64-hex-chars>' format (e.g. '1:0123456789abcdef...'). JSON format is not supported.`,
+    );
+  }
+
   const parsedKeyring = new Map<number, Buffer>();
-  const entries = encryptionKeysRaw
+  const entries = trimmedKeyring
     .split(',')
     .map((e) => e.trim())
     .filter((e) => e.length > 0);

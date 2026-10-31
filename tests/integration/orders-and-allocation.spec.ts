@@ -84,7 +84,9 @@ describe('Orders & Allocation Integration Tests (T055)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   describe('Customer Management & Tenant Isolation', () => {

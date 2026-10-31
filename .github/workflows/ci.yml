@@ -32,14 +32,20 @@ jobs:
       DB_HOST: localhost
       DB_PORT: 5432
       DB_NAME: omnistock_test
+      DB_APP_USER: omnistock_app
+      DB_APP_PASSWORD: AppSecurePass123!
+      DB_MIGRATOR_USER: omnistock_migrator
+      DB_MIGRATOR_PASSWORD: MigratorSecurePass123!
       DB_USERNAME: omnistock_app
       DB_PASSWORD: AppSecurePass123!
       MIGRATOR_DB_USERNAME: omnistock_migrator
       MIGRATOR_DB_PASSWORD: MigratorSecurePass123!
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       JWT_SECRET: e4b2c9a1d8f7e6b5c4a3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1
       JWT_EXPIRATION: 15m
-      WEBHOOK_SECRET_ENCRYPTION_KEY_ACTIVE: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-      WEBHOOK_SECRET_ENCRYPTION_KEYS: '{"v1":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}'
+      WEBHOOK_SECRET_ENCRYPTION_CURRENT_KEY_VERSION: 1
+      WEBHOOK_SECRET_ENCRYPTION_KEYS: 1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       SYNC_WORKER_ENABLED: false
       TRUSTED_PROXY_IPS: 127.0.0.1,::1
 

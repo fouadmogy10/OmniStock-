@@ -136,7 +136,9 @@ describe('Sync & Webhook Authentication Integration Tests (T033)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   describe('Webhook Credentials & Keyring Management (T068)', () => {

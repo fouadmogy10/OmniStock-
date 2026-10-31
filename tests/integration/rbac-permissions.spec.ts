@@ -34,10 +34,17 @@ describe('RBAC Permissions & Tenant Membership Integration Tests (T057)', () => 
 
     await appDs.initialize();
 
-    // Seed test users under tenant context
+    // Seed test tenant and users under tenant context
     const qr = appDs.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
+
+    await qr.query(`
+      INSERT INTO tenants (id, name, slug, is_active)
+      VALUES ('${tenantId}', 'RBAC Test Tenant', 'rbac-test-tenant', true)
+      ON CONFLICT (id) DO NOTHING;
+    `);
+
     await qr.query(`SET LOCAL app.current_tenant_id = '${tenantId}';`);
 
     await qr.query(`
@@ -58,7 +65,19 @@ describe('RBAC Permissions & Tenant Membership Integration Tests (T057)', () => 
 
   afterAll(async () => {
     if (appDs && appDs.isInitialized) {
-      await appDs.destroy();
+      try {
+        const cleanupQr = appDs.createQueryRunner();
+        await cleanupQr.connect();
+        await cleanupQr.startTransaction();
+        await cleanupQr.query(`SET LOCAL app.current_tenant_id = '${tenantId}';`);
+        await cleanupQr.query(`DELETE FROM users WHERE tenant_id = '${tenantId}';`);
+        await cleanupQr.commitTransaction();
+        await cleanupQr.release();
+      } catch {
+        // ignore cleanup error
+      } finally {
+        await appDs.destroy();
+      }
     }
   });
 

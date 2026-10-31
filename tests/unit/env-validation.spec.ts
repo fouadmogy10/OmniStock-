@@ -101,6 +101,58 @@ describe('Environment Validation Unit Tests (T074, FR-019)', () => {
         }),
       ).toThrow(/Duplicate key version '1'/);
     });
+
+    it('fails closed when keyring is provided as JSON format instead of canonical <version>:<hex>', () => {
+      const hexKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+      expect(() =>
+        validateEnv({
+          ...baseValidConfig,
+          WEBHOOK_SECRET_ENCRYPTION_KEYS: `{"v1":"${hexKey}"}`,
+        }),
+      ).toThrow(/JSON format is not supported/);
+    });
+
+    it('fails closed when key version is non-numeric string', () => {
+      const hexKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+      expect(() =>
+        validateEnv({
+          ...baseValidConfig,
+          WEBHOOK_SECRET_ENCRYPTION_KEYS: `v1:${hexKey}`,
+        }),
+      ).toThrow(/Key version in keyring must be a positive integer >= 1/);
+    });
+
+    it('fails closed when key version is 0', () => {
+      const hexKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+      expect(() =>
+        validateEnv({
+          ...baseValidConfig,
+          WEBHOOK_SECRET_ENCRYPTION_CURRENT_KEY_VERSION: '0',
+          WEBHOOK_SECRET_ENCRYPTION_KEYS: `0:${hexKey}`,
+        }),
+      ).toThrow(/must be a positive integer >= 1/);
+    });
+
+    it('fails closed when entry format is missing colon delimiter', () => {
+      const hexKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+      expect(() =>
+        validateEnv({
+          ...baseValidConfig,
+          WEBHOOK_SECRET_ENCRYPTION_KEYS: `1${hexKey}`,
+        }),
+      ).toThrow(/Invalid keyring entry format/);
+    });
+
+    it('accepts multiple valid versions in canonical format', () => {
+      const hex1 = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+      const hex2 = 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
+      const config = validateEnv({
+        ...baseValidConfig,
+        WEBHOOK_SECRET_ENCRYPTION_CURRENT_KEY_VERSION: '2',
+        WEBHOOK_SECRET_ENCRYPTION_KEYS: `1:${hex1}, 2:${hex2}`,
+      });
+      expect(config.WEBHOOK_SECRET_ENCRYPTION_CURRENT_KEY_VERSION).toBe(2);
+    });
   });
 
   describe('Database Role Isolation', () => {

@@ -72,7 +72,10 @@ describe('AuditLog Integration Tests (T043)', () => {
       port: parseInt(process.env.DB_PORT || '5432', 10),
       database: process.env.DB_NAME || 'omnistock',
       username: 'postgres',
-      password: process.env.POSTGRES_PASSWORD || 'PostgresSuperSecretPass123!',
+      password:
+        process.env.POSTGRES_PASSWORD ||
+        process.env.PGPASSWORD ||
+        (process.env.CI ? 'postgres' : 'PostgresSuperSecretPass123!'),
       synchronize: false,
     });
     await adminDs.initialize();
