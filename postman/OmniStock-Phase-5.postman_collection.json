@@ -1,0 +1,1147 @@
+{
+  "info": {
+    "_postman_id": "9c1b2f3a-4e5a-6b78-c901-0a1b2c3d4e5f",
+    "name": "OmniStock Phase 5 - Customers, Orders & Split Allocation",
+    "description": "Comprehensive Postman smoke test collection for OmniStock MVP Phase 5 (User Story 3: Automated Order Allocation & Reservation). Covers Customer Management, Snapshot Preservation, Order State Machine (DRAFT -> PENDING -> ALLOCATED -> SHIPPED / CANCELLED), Deterministic Multi-Warehouse Split Allocation, All-or-Nothing Insufficient Stock Rollback, Stock Movements on Shipment, and Cross-Tenant Isolation.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Setup & Auth",
+      "item": [
+        {
+          "name": "01 - Onboard Phase 5 Tenant A",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('phase5TenantSlugA', 'p5-smoke-a-' + ts);",
+                  "pm.environment.set('phase5AdminEmailA', 'admin-p5-a-' + ts + '@smoke.com');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Tenant A created', function () {",
+                  "    pm.expect(jsonData.tenant).to.be.an('object');",
+                  "    pm.expect(jsonData.tenant.id).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('phase5TenantIdA', jsonData.tenant.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Phase 5 Smoke Tenant A\",\n  \"slug\": \"{{phase5TenantSlugA}}\",\n  \"admin_email\": \"{{phase5AdminEmailA}}\",\n  \"admin_password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants"]
+            }
+          }
+        },
+        {
+          "name": "02 - Login Admin Tenant A",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('JWT token received', function () {",
+                  "    pm.expect(jsonData.access_token).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('phase5AdminTokenA', jsonData.access_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_slug\": \"{{phase5TenantSlugA}}\",\n  \"email\": \"{{phase5AdminEmailA}}\",\n  \"password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "03 - Onboard Phase 5 Tenant B",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('phase5TenantSlugB', 'p5-smoke-b-' + ts);",
+                  "pm.environment.set('phase5AdminEmailB', 'admin-p5-b-' + ts + '@smoke.com');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('phase5TenantIdB', jsonData.tenant.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Phase 5 Smoke Tenant B\",\n  \"slug\": \"{{phase5TenantSlugB}}\",\n  \"admin_email\": \"{{phase5AdminEmailB}}\",\n  \"admin_password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants"]
+            }
+          }
+        },
+        {
+          "name": "04 - Login Admin Tenant B",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('phase5AdminTokenB', jsonData.access_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_slug\": \"{{phase5TenantSlugB}}\",\n  \"email\": \"{{phase5AdminEmailB}}\",\n  \"password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Customer Management",
+      "item": [
+        {
+          "name": "01 - Create Customer (Tenant A)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Customer fields created correctly', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.name).to.eql('Alice Walker');",
+                  "    pm.expect(jsonData.email).to.eql('alice.walker@smoke.com');",
+                  "    pm.expect(jsonData.phone).to.eql('+966504444444');",
+                  "});",
+                  "pm.environment.set('phase5CustomerIdA', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Alice Walker\",\n  \"email\": \"alice.walker@smoke.com\",\n  \"phone\": \"+966504444444\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/customers",
+              "host": ["{{baseUrl}}"],
+              "path": ["customers"]
+            }
+          }
+        },
+        {
+          "name": "02 - Reject Duplicate Email in Same Tenant (409 Conflict)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is DUPLICATE_CUSTOMER_EMAIL', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('DUPLICATE_CUSTOMER_EMAIL');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Alice Duplicate\",\n  \"email\": \"ALICE.WALKER@SMOKE.COM\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/customers",
+              "host": ["{{baseUrl}}"],
+              "path": ["customers"]
+            }
+          }
+        },
+        {
+          "name": "03 - Allow Same Email in Tenant B (Tenant Scoped Uniqueness)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Created for Tenant B', function () {",
+                  "    pm.expect(jsonData.tenant_id).to.eql(pm.environment.get('phase5TenantIdB'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenB}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Alice in Tenant B\",\n  \"email\": \"alice.walker@smoke.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/customers",
+              "host": ["{{baseUrl}}"],
+              "path": ["customers"]
+            }
+          }
+        },
+        {
+          "name": "04 - Get Customer By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Customer matches ID', function () {",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get('phase5CustomerIdA'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers/{{phase5CustomerIdA}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["customers", "{{phase5CustomerIdA}}"]
+            }
+          }
+        },
+        {
+          "name": "05 - List Customers (Paginated)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Contains paginated customer data', function () {",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "    pm.expect(jsonData.total).to.be.at.least(1);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers?search=Alice",
+              "host": ["{{baseUrl}}"],
+              "path": ["customers"],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "Alice"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Prerequisites - Catalog & Inventory",
+      "item": [
+        {
+          "name": "01 - Create Product 1",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.environment.set('phase5Sku1', 'P5-PROD1-' + Date.now());"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('phase5Prod1Id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{phase5Sku1}}\",\n  \"name\": \"Phase 5 Main Product\",\n  \"price\": 120.00\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"]
+            }
+          }
+        },
+        {
+          "name": "02 - Create Warehouse 1 (Priority 1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('phase5Wh1Id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"P5 Central Hub (P1)\",\n  \"priority\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/warehouses",
+              "host": ["{{baseUrl}}"],
+              "path": ["warehouses"]
+            }
+          }
+        },
+        {
+          "name": "03 - Create Warehouse 2 (Priority 2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('phase5Wh2Id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"P5 Regional Depot (P2)\",\n  \"priority\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/warehouses",
+              "host": ["{{baseUrl}}"],
+              "path": ["warehouses"]
+            }
+          }
+        },
+        {
+          "name": "04 - Stock 5 Units of Product 1 in WH1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{phase5Prod1Id}}\",\n  \"warehouse_id\": \"{{phase5Wh1Id}}\",\n  \"delta\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "adjust"]
+            }
+          }
+        },
+        {
+          "name": "05 - Stock 7 Units of Product 1 in WH2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{phase5Prod1Id}}\",\n  \"warehouse_id\": \"{{phase5Wh2Id}}\",\n  \"delta\": 7\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "adjust"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Order Creation & Snapshots",
+      "item": [
+        {
+          "name": "01 - Create DRAFT Order (auto_allocate = false)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Order in DRAFT status with snapshots', function () {",
+                  "    pm.expect(jsonData.status).to.eql('DRAFT');",
+                  "    pm.expect(jsonData.customer_name_snapshot).to.eql('Alice Walker');",
+                  "    pm.expect(jsonData.customer_email_snapshot).to.eql('alice.walker@smoke.com');",
+                  "    pm.expect(jsonData.items).to.be.an('array');",
+                  "    pm.expect(jsonData.items[0].allocations).to.be.an('array').that.is.empty;",
+                  "});",
+                  "pm.environment.set('phase5DraftOrderId', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"{{phase5CustomerIdA}}\",\n  \"auto_allocate\": false,\n  \"items\": [\n    {\n      \"product_id\": \"{{phase5Prod1Id}}\",\n      \"quantity\": 2\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"]
+            }
+          }
+        },
+        {
+          "name": "02 - Update Customer Name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.expect(jsonData.name).to.eql('Alice NameHasChanged');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Alice NameHasChanged\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/customers/{{phase5CustomerIdA}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["customers", "{{phase5CustomerIdA}}"]
+            }
+          }
+        },
+        {
+          "name": "03 - Verify Order Customer Snapshot Preserved",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Historical customer snapshot is preserved', function () {",
+                  "    pm.expect(jsonData.customer_name_snapshot).to.eql('Alice Walker');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{phase5DraftOrderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{phase5DraftOrderId}}"]
+            }
+          }
+        },
+        {
+          "name": "04 - Submit DRAFT Order (DRAFT -> PENDING)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Order status is PENDING', function () {",
+                  "    pm.expect(jsonData.status).to.eql('PENDING');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{phase5DraftOrderId}}/submit",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{phase5DraftOrderId}}", "submit"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Split Allocation & All-Or-Nothing Rules",
+      "item": [
+        {
+          "name": "01 - Create Order Requiring Split Allocation Across WH1 & WH2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Order is ALLOCATED with 2 warehouse splits', function () {",
+                  "    pm.expect(jsonData.status).to.eql('ALLOCATED');",
+                  "    pm.expect(jsonData.items).to.be.an('array');",
+                  "    const allocations = jsonData.items[0].allocations;",
+                  "    pm.expect(allocations).to.have.lengthOf(2);",
+                  "    const wh1Alloc = allocations.find(a => a.warehouse_id === pm.environment.get('phase5Wh1Id'));",
+                  "    const wh2Alloc = allocations.find(a => a.warehouse_id === pm.environment.get('phase5Wh2Id'));",
+                  "    pm.expect(wh1Alloc.allocated_quantity).to.eql(5);",
+                  "    pm.expect(wh2Alloc.allocated_quantity).to.eql(5);",
+                  "});",
+                  "pm.environment.set('phase5SplitOrderId', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"{{phase5CustomerIdA}}\",\n  \"auto_allocate\": true,\n  \"items\": [\n    {\n      \"product_id\": \"{{phase5Prod1Id}}\",\n      \"quantity\": 10\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"]
+            }
+          }
+        },
+        {
+          "name": "02 - Reject Order Exceeding Total Available Stock (INSUFFICIENT_STOCK)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is INSUFFICIENT_STOCK', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('INSUFFICIENT_STOCK');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"{{phase5CustomerIdA}}\",\n  \"auto_allocate\": true,\n  \"items\": [\n    {\n      \"product_id\": \"{{phase5Prod1Id}}\",\n      \"quantity\": 5\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"]
+            }
+          }
+        },
+        {
+          "name": "03 - Allocate Pending Order (POST /orders/:id/allocate)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Status transitioned to ALLOCATED', function () {",
+                  "    pm.expect(jsonData.status).to.eql('ALLOCATED');",
+                  "    pm.expect(jsonData.items[0].allocations).to.have.lengthOf(1);",
+                  "    pm.expect(jsonData.items[0].allocations[0].allocated_quantity).to.eql(2);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{phase5DraftOrderId}}/allocate",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{phase5DraftOrderId}}", "allocate"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Shipping & Order Cancellation Lifecycle",
+      "item": [
+        {
+          "name": "01 - Ship Allocated Order (ALLOCATED -> SHIPPED)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Order status is SHIPPED', function () {",
+                  "    pm.expect(jsonData.status).to.eql('SHIPPED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{phase5DraftOrderId}}/ship",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{phase5DraftOrderId}}", "ship"]
+            }
+          }
+        },
+        {
+          "name": "02 - Reject Cancellation on SHIPPED Order (INVALID_ORDER_TRANSITION)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is INVALID_ORDER_TRANSITION', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('INVALID_ORDER_TRANSITION');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{phase5DraftOrderId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{phase5DraftOrderId}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "03 - Cancel Split ALLOCATED Order (Restores Stock)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Order is CANCELLED', function () {",
+                  "    pm.expect(jsonData.status).to.eql('CANCELLED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{phase5SplitOrderId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{phase5SplitOrderId}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "04 - Verify Stock Restored in WH1 and WH2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "const wh1Item = jsonData.data.find(i => i.warehouse_id === pm.environment.get('phase5Wh1Id') && i.product_id === pm.environment.get('phase5Prod1Id'));",
+                  "const wh2Item = jsonData.data.find(i => i.warehouse_id === pm.environment.get('phase5Wh2Id') && i.product_id === pm.environment.get('phase5Prod1Id'));",
+                  "pm.test('Reserved counts restored to 0', function () {",
+                  "    pm.expect(wh1Item.reserved).to.eql(0);",
+                  "    pm.expect(wh2Item.reserved).to.eql(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/levels?product_id={{phase5Prod1Id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "levels"],
+              "query": [
+                {
+                  "key": "product_id",
+                  "value": "{{phase5Prod1Id}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Multi-Tenant Isolation",
+      "item": [
+        {
+          "name": "01 - Prevent Tenant B from Accessing Tenant A Customer (404 Not Found)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers/{{phase5CustomerIdA}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["customers", "{{phase5CustomerIdA}}"]
+            }
+          }
+        },
+        {
+          "name": "02 - Prevent Tenant B from Accessing Tenant A Order (404 Not Found)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{phase5SplitOrderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{phase5SplitOrderId}}"]
+            }
+          }
+        },
+        {
+          "name": "03 - Prevent Tenant B from Shipping Tenant A Order (404 Not Found)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{phase5AdminTokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{phase5SplitOrderId}}/ship",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{phase5SplitOrderId}}", "ship"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+
