@@ -38,7 +38,7 @@ export class OrderService {
 
   async create(
     tenantId: string,
-    actorUserId: string,
+    actorUserId: string | null | undefined,
     dto: CreateOrderDto,
   ): Promise<Order> {
     const autoAllocate = dto.auto_allocate !== false;

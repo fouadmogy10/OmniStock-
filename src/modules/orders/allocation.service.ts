@@ -36,7 +36,7 @@ export class AllocationService {
    */
   async allocateOrder(
     tenantId: string,
-    actorUserId: string,
+    actorUserId: string | null | undefined,
     orderId: string,
     items: OrderItem[],
     qr: QueryRunner,
@@ -208,7 +208,7 @@ export class AllocationService {
           await this.lowStockAlertService.evaluateAlert(
             tenantId,
             updatedItem,
-            actorUserId,
+            actorUserId || undefined,
             qr.manager,
           );
         }

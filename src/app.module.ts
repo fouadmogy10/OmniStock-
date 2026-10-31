@@ -10,6 +10,8 @@ import { WarehousesModule } from './modules/warehouses/warehouses.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { OrdersModule } from './modules/orders/orders.module';
+import { SyncModule } from './modules/sync/sync.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
@@ -29,6 +31,8 @@ import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
     InventoryModule,
     CustomersModule,
     OrdersModule,
+    SyncModule,
+    DashboardModule,
   ],
   providers: [
     {

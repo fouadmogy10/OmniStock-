@@ -1,0 +1,1192 @@
+{
+  "info": {
+    "_postman_id": "c6a1d8e0-1234-4567-89ab-cdef01234567",
+    "name": "OmniStock Phase 6 - Sync, Webhooks & Dashboard",
+    "description": "Comprehensive Postman smoke test collection for OmniStock MVP Phase 6 (Synchronization, Webhook Authentication, Retries & Operational Dashboard). Covers Webhook Credential Management, AES-256-GCM / HMAC-SHA256 signature verification, 3-Phase Inbound Webhook Order Ingestion, Idempotency, Sync Log & Attempt queries, Manual Retry acceleration guards, and GET /dashboard/summary operational metrics with ISO-8601 UTC-offset validation.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Setup & Auth",
+      "item": [
+        {
+          "name": "01 - Onboard Phase 6 Tenant A",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('p6TenantSlugA', 'p6-smoke-a-' + ts);",
+                  "pm.environment.set('p6AdminEmailA', 'admin-p6-a-' + ts + '@smoke.com');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Tenant A created', function () {",
+                  "    pm.expect(jsonData.tenant).to.be.an('object');",
+                  "    pm.expect(jsonData.tenant.id).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('p6TenantIdA', jsonData.tenant.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Phase 6 Smoke Tenant A\",\n  \"slug\": \"{{p6TenantSlugA}}\",\n  \"admin_email\": \"{{p6AdminEmailA}}\",\n  \"admin_password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants"]
+            }
+          }
+        },
+        {
+          "name": "02 - Login Admin Tenant A",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('JWT token received', function () {",
+                  "    pm.expect(jsonData.access_token).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('p6AdminTokenA', jsonData.access_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_slug\": \"{{p6TenantSlugA}}\",\n  \"email\": \"{{p6AdminEmailA}}\",\n  \"password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "03 - Onboard Phase 6 Tenant B",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('p6TenantSlugB', 'p6-smoke-b-' + ts);",
+                  "pm.environment.set('p6AdminEmailB', 'admin-p6-b-' + ts + '@smoke.com');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('p6TenantIdB', jsonData.tenant.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Phase 6 Smoke Tenant B\",\n  \"slug\": \"{{p6TenantSlugB}}\",\n  \"admin_email\": \"{{p6AdminEmailB}}\",\n  \"admin_password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants"]
+            }
+          }
+        },
+        {
+          "name": "04 - Login Admin Tenant B",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('p6AdminTokenB', jsonData.access_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_slug\": \"{{p6TenantSlugB}}\",\n  \"email\": \"{{p6AdminEmailB}}\",\n  \"password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "05 - Seed Warehouse A1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('p6WarehouseA1Id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Main Distribution Center A1\",\n  \"priority\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/warehouses",
+              "host": ["{{baseUrl}}"],
+              "path": ["warehouses"]
+            }
+          }
+        },
+        {
+          "name": "06 - Seed Product A1",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('p6ProductSkuA1', 'SKU-P6-' + ts);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('p6ProductA1Id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{p6ProductSkuA1}}\",\n  \"name\": \"Phase 6 Salla Product\",\n  \"price\": 150.00\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"]
+            }
+          }
+        },
+        {
+          "name": "07 - Adjust Stock for Product A1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{p6ProductA1Id}}\",\n  \"warehouse_id\": \"{{p6WarehouseA1Id}}\",\n  \"delta\": 50,\n  \"reason\": \"P6 Smoke Test Initial Stock\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "adjust"]
+            }
+          }
+        },
+        {
+          "name": "08 - Seed Customer A1",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('p6CustomerEmailA1', 'shopper-p6-' + ts + '@salla-store.com');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('p6CustomerA1Id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Salla Shopper Ahmed\",\n  \"email\": \"{{p6CustomerEmailA1}}\",\n  \"phone\": \"+966551234567\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/customers",
+              "host": ["{{baseUrl}}"],
+              "path": ["customers"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Sync Credentials Lifecycle",
+      "item": [
+        {
+          "name": "09 - Provision Salla Webhook Credential (T068)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Returns one-time webhook secret', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.source).to.eql('salla');",
+                  "    pm.expect(jsonData.webhook_secret).to.be.a('string');",
+                  "    pm.expect(jsonData.webhook_secret.length).to.eql(64);",
+                  "    pm.expect(jsonData.is_active).to.be.true;",
+                  "});",
+                  "pm.test('Does not expose ciphertexts or signing hashes', function () {",
+                  "    pm.expect(jsonData.encrypted_secret).to.be.undefined;",
+                  "    pm.expect(jsonData.encryption_iv).to.be.undefined;",
+                  "    pm.expect(jsonData.secret_hash).to.be.undefined;",
+                  "});",
+                  "pm.environment.set('p6CredentialId', jsonData.id);",
+                  "pm.environment.set('p6WebhookSecret', jsonData.webhook_secret);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source\": \"salla\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sync/credentials",
+              "host": ["{{baseUrl}}"],
+              "path": ["sync", "credentials"]
+            }
+          }
+        },
+        {
+          "name": "10 - List Webhook Credentials - Verify Safe Metadata (T068)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Returns credentials array with safe fields only', function () {",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "    pm.expect(jsonData.length).to.be.greaterThan(0);",
+                  "    const cred = jsonData.find(c => c.id === pm.environment.get('p6CredentialId'));",
+                  "    pm.expect(cred).to.be.an('object');",
+                  "    pm.expect(cred.source).to.eql('salla');",
+                  "    pm.expect(cred.is_active).to.be.true;",
+                  "    pm.expect(cred.webhook_secret).to.be.undefined;",
+                  "    pm.expect(cred.encrypted_secret).to.be.undefined;",
+                  "    pm.expect(cred.secret_hash).to.be.undefined;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sync/credentials",
+              "host": ["{{baseUrl}}"],
+              "path": ["sync", "credentials"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Inbound Webhooks & HMAC Verification",
+      "item": [
+        {
+          "name": "11 - Process Valid Webhook with HMAC-SHA256 Signature (T031, T032, T068)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Math.floor(Date.now() / 1000);",
+                  "const extId = 'ORD-EXT-' + Date.now();",
+                  "pm.environment.set('p6ExternalId', extId);",
+                  "pm.environment.set('p6Timestamp', ts.toString());",
+                  "",
+                  "const payload = JSON.stringify({",
+                  "  customer_id: pm.environment.get('p6CustomerA1Id'),",
+                  "  items: [",
+                  "    { product_id: pm.environment.get('p6ProductA1Id'), quantity: 2 }",
+                  "  ]",
+                  "});",
+                  "pm.environment.set('p6WebhookPayload', payload);",
+                  "",
+                  "const secret = pm.environment.get('p6WebhookSecret');",
+                  "const message = ts.toString() + '.' + payload;",
+                  "const sigHex = CryptoJS.HmacSHA256(message, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.environment.set('p6Signature', 'v1=' + sigHex);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Webhook processed and SUCCEEDED sync log returned', function () {",
+                  "    pm.expect(jsonData).to.be.an('object');",
+                  "    pm.expect(jsonData.status).to.eql('SUCCEEDED');",
+                  "    pm.expect(jsonData.order_id).to.be.a('string');",
+                  "    pm.expect(jsonData.attempt_count).to.eql(1);",
+                  "});",
+                  "pm.environment.set('p6SyncLogId', jsonData.id);",
+                  "pm.environment.set('p6CreatedOrderId', jsonData.order_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sync-Tenant-Slug",
+                "value": "{{p6TenantSlugA}}"
+              },
+              {
+                "key": "X-Sync-External-Id",
+                "value": "{{p6ExternalId}}"
+              },
+              {
+                "key": "X-Sync-Timestamp",
+                "value": "{{p6Timestamp}}"
+              },
+              {
+                "key": "X-Sync-Signature",
+                "value": "{{p6Signature}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{p6WebhookPayload}}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sync/webhook/salla",
+              "host": ["{{baseUrl}}"],
+              "path": ["sync", "webhook", "salla"]
+            }
+          }
+        },
+        {
+          "name": "12 - Idempotent Duplicate Webhook Delivery -> 200 OK (T031)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK (Idempotent replay)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Returns existing SUCCEEDED sync log without creating new order', function () {",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get('p6SyncLogId'));",
+                  "    pm.expect(jsonData.status).to.eql('SUCCEEDED');",
+                  "    pm.expect(jsonData.order_id).to.eql(pm.environment.get('p6CreatedOrderId'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sync-Tenant-Slug",
+                "value": "{{p6TenantSlugA}}"
+              },
+              {
+                "key": "X-Sync-External-Id",
+                "value": "{{p6ExternalId}}"
+              },
+              {
+                "key": "X-Sync-Timestamp",
+                "value": "{{p6Timestamp}}"
+              },
+              {
+                "key": "X-Sync-Signature",
+                "value": "{{p6Signature}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{p6WebhookPayload}}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sync/webhook/salla",
+              "host": ["{{baseUrl}}"],
+              "path": ["sync", "webhook", "salla"]
+            }
+          }
+        },
+        {
+          "name": "13 - Reject Webhook with Malformed Signature -> 401 Unauthorized (T032)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Returns WEBHOOK_AUTH_UNAUTHORIZED', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('WEBHOOK_AUTH_UNAUTHORIZED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sync-Tenant-Slug",
+                "value": "{{p6TenantSlugA}}"
+              },
+              {
+                "key": "X-Sync-External-Id",
+                "value": "MALFORMED-SIG-ID"
+              },
+              {
+                "key": "X-Sync-Timestamp",
+                "value": "{{p6Timestamp}}"
+              },
+              {
+                "key": "X-Sync-Signature",
+                "value": "invalid-sig-format"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sync/webhook/salla",
+              "host": ["{{baseUrl}}"],
+              "path": ["sync", "webhook", "salla"]
+            }
+          }
+        },
+        {
+          "name": "14 - Reject Webhook with Expired Timestamp Outside 300s Window -> 401 Unauthorized (T032)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const oldTs = Math.floor(Date.now() / 1000) - 301;",
+                  "pm.environment.set('p6OldTimestamp', oldTs.toString());",
+                  "const payload = '{}';",
+                  "const secret = pm.environment.get('p6WebhookSecret');",
+                  "const message = oldTs.toString() + '.' + payload;",
+                  "const sigHex = CryptoJS.HmacSHA256(message, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.environment.set('p6OldSignature', 'v1=' + sigHex);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Returns WEBHOOK_AUTH_UNAUTHORIZED for expired timestamp', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('WEBHOOK_AUTH_UNAUTHORIZED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sync-Tenant-Slug",
+                "value": "{{p6TenantSlugA}}"
+              },
+              {
+                "key": "X-Sync-External-Id",
+                "value": "EXPIRED-TS-ID"
+              },
+              {
+                "key": "X-Sync-Timestamp",
+                "value": "{{p6OldTimestamp}}"
+              },
+              {
+                "key": "X-Sync-Signature",
+                "value": "{{p6OldSignature}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sync/webhook/salla",
+              "host": ["{{baseUrl}}"],
+              "path": ["sync", "webhook", "salla"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Sync Logs, Attempts & Retries",
+      "item": [
+        {
+          "name": "15 - List Sync Logs with Pagination (T063)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Returns sync logs data array', function () {",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "    pm.expect(jsonData.total).to.be.greaterThan(0);",
+                  "    const log = jsonData.data.find(l => l.id === pm.environment.get('p6SyncLogId'));",
+                  "    pm.expect(log).to.be.an('object');",
+                  "    pm.expect(log.status).to.eql('SUCCEEDED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sync/logs?limit=10&page=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["sync", "logs"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "16 - Get Sync Log by ID with Ordered Attempts (T063)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Returns sync log with attempts array', function () {",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get('p6SyncLogId'));",
+                  "    pm.expect(jsonData.status).to.eql('SUCCEEDED');",
+                  "    pm.expect(jsonData.attempts).to.be.an('array');",
+                  "    pm.expect(jsonData.attempts.length).to.be.greaterThan(0);",
+                  "    pm.expect(jsonData.attempts[0].status).to.eql('SUCCEEDED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sync/logs/{{p6SyncLogId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["sync", "logs", "{{p6SyncLogId}}"]
+            }
+          }
+        },
+        {
+          "name": "17 - Reject Manual Retry on SUCCEEDED Log -> 409 Conflict (T062, T063)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Returns INVALID_SYNC_RETRY_STATE', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('INVALID_SYNC_RETRY_STATE');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sync/logs/{{p6SyncLogId}}/retry",
+              "host": ["{{baseUrl}}"],
+              "path": ["sync", "logs", "{{p6SyncLogId}}", "retry"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Operational Dashboard Summary",
+      "item": [
+        {
+          "name": "18 - Get Dashboard Summary - Valid ISO-8601 Parameters (T064, T065)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();",
+                  "const to = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();",
+                  "pm.environment.set('p6DashFrom', from);",
+                  "pm.environment.set('p6DashTo', to);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Echoes UTC period correctly', function () {",
+                  "    pm.expect(jsonData.period.from).to.eql(pm.environment.get('p6DashFrom'));",
+                  "    pm.expect(jsonData.period.to).to.eql(pm.environment.get('p6DashTo'));",
+                  "    pm.expect(jsonData.period.timezone).to.eql('UTC');",
+                  "});",
+                  "pm.test('Catalog and network metrics are accurate', function () {",
+                  "    pm.expect(jsonData.catalog_and_network.total_products).to.be.at.least(1);",
+                  "    pm.expect(jsonData.catalog_and_network.total_warehouses).to.be.at.least(1);",
+                  "    pm.expect(jsonData.catalog_and_network.total_customers).to.be.at.least(1);",
+                  "});",
+                  "pm.test('Orders by status contains all 5 states', function () {",
+                  "    pm.expect(jsonData.orders_by_status).to.have.property('DRAFT');",
+                  "    pm.expect(jsonData.orders_by_status).to.have.property('PENDING');",
+                  "    pm.expect(jsonData.orders_by_status).to.have.property('ALLOCATED');",
+                  "    pm.expect(jsonData.orders_by_status).to.have.property('SHIPPED');",
+                  "    pm.expect(jsonData.orders_by_status).to.have.property('CANCELLED');",
+                  "    pm.expect(jsonData.orders_by_status.ALLOCATED).to.be.at.least(1);",
+                  "});",
+                  "pm.test('Period order value reflects committed amount', function () {",
+                  "    pm.expect(jsonData.period_order_value.allocated_order_value).to.be.at.least(300.0);",
+                  "    pm.expect(jsonData.period_order_value.combined_committed_order_value).to.be.at.least(300.0);",
+                  "});",
+                  "pm.test('Inventory summary reflects 50 on_hand - 2 reserved = 48 available', function () {",
+                  "    pm.expect(jsonData.inventory_quantity_summary.total_on_hand).to.eql(50);",
+                  "    pm.expect(jsonData.inventory_quantity_summary.total_reserved).to.eql(2);",
+                  "    pm.expect(jsonData.inventory_quantity_summary.total_available).to.eql(48);",
+                  "});",
+                  "pm.test('Excludes cost/valuation fields from summary', function () {",
+                  "    const rawText = pm.response.text();",
+                  "    pm.expect(rawText).to.not.include('valuation');",
+                  "    pm.expect(rawText).to.not.include('cost_price');",
+                  "});",
+                  "pm.test('Contains recent orders and stock movements arrays', function () {",
+                  "    pm.expect(jsonData.recent_orders).to.be.an('array');",
+                  "    pm.expect(jsonData.recent_orders.length).to.be.at.least(1);",
+                  "    pm.expect(jsonData.recent_stock_movements).to.be.an('array');",
+                  "    pm.expect(jsonData.recent_stock_movements.length).to.be.at.least(1);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/summary?from={{p6DashFrom}}&to={{p6DashTo}}&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "summary"],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "{{p6DashFrom}}"
+                },
+                {
+                  "key": "to",
+                  "value": "{{p6DashTo}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "19 - Reject Date-Only String without Timezone -> 400 VALIDATION_ERROR (T064, T065)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Returns VALIDATION_ERROR for date-only timestamp', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/summary?from=2026-10-01&to=2026-10-31T23:59:59Z",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "summary"],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-10-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-10-31T23:59:59Z"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "20 - Reject Invalid Limit (< 1 or > 50) -> 400 VALIDATION_ERROR (T064, T065)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Returns VALIDATION_ERROR for limit out of bounds', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/summary?limit=100",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "summary"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "21 - Scoped Dashboard Summary by Warehouse ID (T064, T065)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Scopes to specified warehouse', function () {",
+                  "    pm.expect(jsonData.warehouse_id).to.eql(pm.environment.get('p6WarehouseA1Id'));",
+                  "    pm.expect(jsonData.inventory_quantity_summary.total_on_hand).to.eql(50);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/summary?warehouse_id={{p6WarehouseA1Id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "summary"],
+              "query": [
+                {
+                  "key": "warehouse_id",
+                  "value": "{{p6WarehouseA1Id}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Multi-Tenant Isolation & Cleanup",
+      "item": [
+        {
+          "name": "22 - Cross-Tenant Dashboard Isolation (Tenant B cannot see Tenant A data)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Tenant B summary has 0 products, 0 orders, 0 inventory', function () {",
+                  "    pm.expect(jsonData.catalog_and_network.total_products).to.eql(0);",
+                  "    pm.expect(jsonData.catalog_and_network.total_customers).to.eql(0);",
+                  "    pm.expect(jsonData.period_order_value.combined_committed_order_value).to.eql(0.0);",
+                  "    pm.expect(jsonData.inventory_quantity_summary.total_on_hand).to.eql(0);",
+                  "    pm.expect(jsonData.recent_orders).to.be.an('array').that.is.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "summary"]
+            }
+          }
+        },
+        {
+          "name": "23 - Tenant B Cannot Access Tenant A Sync Log -> 404 Not Found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sync/logs/{{p6SyncLogId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["sync", "logs", "{{p6SyncLogId}}"]
+            }
+          }
+        },
+        {
+          "name": "24 - Revoke Webhook Credential (T068)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Credential marked revoked (is_active = false)', function () {",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get('p6CredentialId'));",
+                  "    pm.expect(jsonData.is_active).to.be.false;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{p6AdminTokenA}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sync/credentials/{{p6CredentialId}}/revoke",
+              "host": ["{{baseUrl}}"],
+              "path": ["sync", "credentials", "{{p6CredentialId}}", "revoke"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
