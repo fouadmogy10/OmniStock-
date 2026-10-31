@@ -55,7 +55,10 @@ export class SyncCredentialService implements OnModuleInit {
       );
     }
 
-    const entries = rawKeyring.split(',').map((s) => s.trim()).filter(Boolean);
+    const entries = rawKeyring
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (entries.length === 0) {
       throw new Error('WEBHOOK_SECRET_ENCRYPTION_KEYS cannot be empty');
     }
@@ -459,4 +462,3 @@ export class SyncCredentialService implements OnModuleInit {
     }
   }
 }
-

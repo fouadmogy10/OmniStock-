@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Query,
-  Req,
-  ParseUUIDPipe,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, Req, ParseUUIDPipe } from '@nestjs/common';
 import { LowStockAlertService } from './low-stock-alert.service';
 import { RequirePermissions, Permission } from '../../common/decorators/permissions.decorator';
 import { LowStockAlertStatus } from './entities/low-stock-alert.entity';
@@ -36,12 +29,8 @@ export class LowStockAlertController {
 
   @Get(':id')
   @RequirePermissions(Permission.ALERTS_READ)
-  async getAlertById(
-    @Req() req: any,
-    @Param('id', new ParseUUIDPipe()) id: string,
-  ) {
+  async getAlertById(@Req() req: any, @Param('id', new ParseUUIDPipe()) id: string) {
     const tenantId = req.authenticatedUser.tenant_id;
     return await this.alertService.getAlertById(tenantId, id);
   }
 }
-

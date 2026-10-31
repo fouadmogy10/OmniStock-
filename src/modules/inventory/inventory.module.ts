@@ -33,11 +33,7 @@ import { AuditModule } from '../audit/audit.module';
     InventoryService,
     StockTransferService,
   ],
-  controllers: [
-    InventoryController,
-    StockTransferController,
-    LowStockAlertController,
-  ],
+  controllers: [InventoryController, StockTransferController, LowStockAlertController],
   exports: [
     InventoryRepository,
     StockMovementRepository,
@@ -47,4 +43,3 @@ import { AuditModule } from '../audit/audit.module';
   ],
 })
 export class InventoryModule {}
-

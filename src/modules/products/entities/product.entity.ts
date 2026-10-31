@@ -36,4 +36,3 @@ export class Product extends BaseTenantEntity {
   // Virtual property populated on GET /products/:id when is_variant_parent = true
   variants?: Product[];
 }
-

@@ -258,11 +258,12 @@ export class UserService {
       );
 
       // In PostgreSQL driver via TypeORM, UPDATE RETURNING can return [rows, rowCount] or rows
-      const rows = Array.isArray(updateResult) && Array.isArray(updateResult[0])
-        ? updateResult[0]
-        : Array.isArray(updateResult)
-          ? updateResult
-          : [updateResult];
+      const rows =
+        Array.isArray(updateResult) && Array.isArray(updateResult[0])
+          ? updateResult[0]
+          : Array.isArray(updateResult)
+            ? updateResult
+            : [updateResult];
       const updated = rows[0];
 
       // 4. Record audit log

@@ -48,10 +48,7 @@ export class SyncController {
   @Post('credentials/:id/revoke')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(Permission.SYNC_CREDENTIALS)
-  async revokeCredential(
-    @Req() req: any,
-    @Param('id', new ParseUUIDPipe()) id: string,
-  ) {
+  async revokeCredential(@Req() req: any, @Param('id', new ParseUUIDPipe()) id: string) {
     const tenantId = req.authenticatedUser.tenant_id;
     const actorUserId = req.authenticatedUser.id;
     return await this.syncCredentialService.revokeCredential(tenantId, actorUserId, id);
@@ -104,10 +101,7 @@ export class SyncController {
 
   @Get('logs/:id')
   @RequirePermissions(Permission.SYNC_READ)
-  async getSyncLogById(
-    @Req() req: any,
-    @Param('id', new ParseUUIDPipe()) id: string,
-  ) {
+  async getSyncLogById(@Req() req: any, @Param('id', new ParseUUIDPipe()) id: string) {
     const tenantId = req.authenticatedUser.tenant_id;
     return await this.syncRetryService.getSyncLogById(tenantId, id);
   }
@@ -115,13 +109,9 @@ export class SyncController {
   @Post('logs/:id/retry')
   @HttpCode(HttpStatus.ACCEPTED)
   @RequirePermissions(Permission.SYNC_RETRY)
-  async retrySyncLog(
-    @Req() req: any,
-    @Param('id', new ParseUUIDPipe()) id: string,
-  ) {
+  async retrySyncLog(@Req() req: any, @Param('id', new ParseUUIDPipe()) id: string) {
     const tenantId = req.authenticatedUser.tenant_id;
     const actorUserId = req.authenticatedUser.id;
     return await this.syncRetryService.retrySyncLog(tenantId, actorUserId, id);
   }
 }
-

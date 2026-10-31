@@ -46,4 +46,3 @@ export class CategoryController {
     return await this.categoryService.updateCategory(tenantId, actorUserId, id, dto);
   }
 }
-

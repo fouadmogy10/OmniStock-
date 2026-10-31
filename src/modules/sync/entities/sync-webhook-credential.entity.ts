@@ -1,9 +1,4 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
 
 @Entity('sync_webhook_credentials')
 export class SyncWebhookCredential {
@@ -40,4 +35,3 @@ export class SyncWebhookCredential {
   @Column({ type: 'timestamp with time zone', nullable: true })
   revoked_at?: Date | null;
 }
-

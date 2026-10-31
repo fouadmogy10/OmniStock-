@@ -1,0 +1,86 @@
+name: CI Quality Gates
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  quality-gates:
+    name: Deterministic 8-Stage Quality Gates
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      PORT: 3000
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: omnistock_test
+      DB_USERNAME: omnistock_app
+      DB_PASSWORD: AppSecurePass123!
+      MIGRATOR_DB_USERNAME: omnistock_migrator
+      MIGRATOR_DB_PASSWORD: MigratorSecurePass123!
+      JWT_SECRET: e4b2c9a1d8f7e6b5c4a3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1
+      JWT_EXPIRATION: 15m
+      WEBHOOK_SECRET_ENCRYPTION_KEY_ACTIVE: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      WEBHOOK_SECRET_ENCRYPTION_KEYS: '{"v1":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}'
+      SYNC_WORKER_ENABLED: false
+      TRUSTED_PROXY_IPS: 127.0.0.1,::1
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Stage 1 — Install Dependencies (npm ci)
+        run: npm ci
+
+      - name: Stage 2 — Format Verification (npm run format:check)
+        run: npm run format:check
+
+      - name: Stage 3 — Static Linting (npm run lint)
+        run: npm run lint
+
+      - name: Stage 4 — TypeScript Typecheck (npm run typecheck)
+        run: npm run typecheck
+
+      - name: Stage 5 — Pure Domain & Security Unit Tests (npm run test:unit)
+        run: npm run test:unit
+
+      - name: Bootstrap PostgreSQL Roles and Run Migrations
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -f docker/postgres/init-roles.sql
+          MIGRATOR_DB_USERNAME=omnistock_migrator MIGRATOR_DB_PASSWORD=MigratorSecurePass123! npm run migration:run
+
+      - name: Stage 6 — PostgreSQL-Backed Integration Tests (npm run test:integration)
+        run: npm run test:integration
+
+      - name: Stage 7 — End-to-End Concurrency & Isolation Tests (npm run test:e2e)
+        run: npm run test:e2e
+
+      - name: Stage 8 — Production Build (npm run build)
+        run: npm run build
+

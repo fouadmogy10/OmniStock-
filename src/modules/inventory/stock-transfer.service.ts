@@ -167,7 +167,11 @@ export class StockTransferService {
     }
   }
 
-  async dispatch(tenantId: string, actorUserId: string, transferId: string): Promise<StockTransfer> {
+  async dispatch(
+    tenantId: string,
+    actorUserId: string,
+    transferId: string,
+  ): Promise<StockTransfer> {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
@@ -208,7 +212,10 @@ export class StockTransferService {
 
       // 2. Lock source and destination InventoryItems in (product_id ASC, warehouse_id ASC)
       for (const prodId of productIds) {
-        const warehousesToLock = [transfer.source_warehouse_id, transfer.destination_warehouse_id].sort();
+        const warehousesToLock = [
+          transfer.source_warehouse_id,
+          transfer.destination_warehouse_id,
+        ].sort();
         for (const whId of warehousesToLock) {
           await qr.query(
             `SELECT id FROM inventory_items
@@ -264,7 +271,12 @@ export class StockTransferService {
 
         // Evaluate source low stock alert
         const sourceEntity = qr.manager.create(InventoryItem, updatedSource);
-        await this.lowStockAlertService.evaluateAlert(tenantId, sourceEntity, actorUserId, qr.manager);
+        await this.lowStockAlertService.evaluateAlert(
+          tenantId,
+          sourceEntity,
+          actorUserId,
+          qr.manager,
+        );
 
         // Destination: increment in_transit
         const [destItemRow] = await qr.query(
@@ -411,7 +423,12 @@ export class StockTransferService {
 
         // Evaluate destination low stock alert (resolution check)
         const destEntity = qr.manager.create(InventoryItem, updatedDest);
-        await this.lowStockAlertService.evaluateAlert(tenantId, destEntity, actorUserId, qr.manager);
+        await this.lowStockAlertService.evaluateAlert(
+          tenantId,
+          destEntity,
+          actorUserId,
+          qr.manager,
+        );
       }
 
       // 4. Update StockTransfer status to RECEIVED
@@ -537,7 +554,9 @@ export class StockTransferService {
       }
 
       if (query.destination_warehouse_id) {
-        qb.andWhere('st.destination_warehouse_id = :destWh', { destWh: query.destination_warehouse_id });
+        qb.andWhere('st.destination_warehouse_id = :destWh', {
+          destWh: query.destination_warehouse_id,
+        });
       }
 
       qb.orderBy('st.created_at', 'DESC');

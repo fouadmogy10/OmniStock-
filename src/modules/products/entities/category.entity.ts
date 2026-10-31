@@ -9,4 +9,3 @@ export class Category extends BaseTenantEntity {
   @Column({ type: 'text', nullable: true })
   description?: string | null;
 }
-

@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  BadRequestException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 
@@ -13,8 +9,7 @@ export interface DashboardSummaryParams {
   limit?: number;
 }
 
-const ISO_WITH_OFFSET_REGEX =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+const ISO_WITH_OFFSET_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
 function extractFirstRow<T = any>(queryResult: any): T {
   const rows =
@@ -359,4 +354,3 @@ export class DashboardService {
     }
   }
 }
-

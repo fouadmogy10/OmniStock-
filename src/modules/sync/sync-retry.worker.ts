@@ -7,9 +7,7 @@ import {
 import { SyncRetryService } from './sync-retry.service';
 
 @Injectable()
-export class SyncRetryWorker
-  implements OnApplicationBootstrap, BeforeApplicationShutdown
-{
+export class SyncRetryWorker implements OnApplicationBootstrap, BeforeApplicationShutdown {
   private readonly logger = new Logger(SyncRetryWorker.name);
   private timer: NodeJS.Timeout | null = null;
   private isTickRunning = false;
@@ -19,10 +17,7 @@ export class SyncRetryWorker
 
   onApplicationBootstrap(): void {
     const isWorkerEnabled = process.env.SYNC_WORKER_ENABLED !== 'false';
-    const intervalMs = parseInt(
-      process.env.SYNC_WORKER_POLL_INTERVAL_MS || '5000',
-      10,
-    );
+    const intervalMs = parseInt(process.env.SYNC_WORKER_POLL_INTERVAL_MS || '5000', 10);
 
     if (isWorkerEnabled) {
       this.logger.log(`Starting SyncRetryWorker with interval ${intervalMs}ms`);
@@ -30,9 +25,7 @@ export class SyncRetryWorker
         void this.runTick();
       }, intervalMs);
     } else {
-      this.logger.log(
-        'SyncRetryWorker automatic polling is disabled (SYNC_WORKER_ENABLED=false)',
-      );
+      this.logger.log('SyncRetryWorker automatic polling is disabled (SYNC_WORKER_ENABLED=false)');
     }
   }
 
@@ -61,10 +54,7 @@ export class SyncRetryWorker
       // 2. Claim and process due events
       let hasMore = true;
       let iterations = 0;
-      const maxIterations = parseInt(
-        process.env.SYNC_WORKER_BATCH_SIZE || '10',
-        10,
-      );
+      const maxIterations = parseInt(process.env.SYNC_WORKER_BATCH_SIZE || '10', 10);
 
       while (hasMore && iterations < maxIterations && !this.isShuttingDown) {
         hasMore = await this.syncRetryService.claimAndProcessNextDueEvent();
@@ -77,4 +67,3 @@ export class SyncRetryWorker
     }
   }
 }
-

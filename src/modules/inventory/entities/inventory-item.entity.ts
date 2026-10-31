@@ -35,12 +35,12 @@ export class InventoryItem extends BaseTenantEntity {
       reserved: Number(this.reserved),
       available: this.available,
       in_transit: Number(this.in_transit),
-      low_stock_threshold: this.low_stock_threshold !== undefined && this.low_stock_threshold !== null
-        ? Number(this.low_stock_threshold)
-        : null,
+      low_stock_threshold:
+        this.low_stock_threshold !== undefined && this.low_stock_threshold !== null
+          ? Number(this.low_stock_threshold)
+          : null,
       created_at: this.created_at,
       updated_at: this.updated_at,
     };
   }
 }
-

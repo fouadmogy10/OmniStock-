@@ -20,4 +20,3 @@ import { AuditModule } from '../audit/audit.module';
   exports: [OrderService, AllocationService],
 })
 export class OrdersModule {}
-

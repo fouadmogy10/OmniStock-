@@ -15,4 +15,3 @@ export class Warehouse extends BaseTenantEntity {
   @Column({ type: 'boolean', default: true })
   is_active!: boolean;
 }
-

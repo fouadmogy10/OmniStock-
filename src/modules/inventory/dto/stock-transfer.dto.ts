@@ -41,4 +41,3 @@ export class CreateStockTransferDto {
   @Type(() => CreateStockTransferItemDto)
   items!: CreateStockTransferItemDto[];
 }
-

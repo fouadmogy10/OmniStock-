@@ -77,4 +77,3 @@ export class ProductController {
     return await this.productService.updateProduct(tenantId, actorUserId, id, dto);
   }
 }
-

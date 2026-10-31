@@ -15,4 +15,3 @@ import { AuditModule } from '../audit/audit.module';
   exports: [CategoryService, ProductService],
 })
 export class ProductsModule {}
-

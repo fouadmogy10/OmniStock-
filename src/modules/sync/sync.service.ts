@@ -3,17 +3,16 @@ import {
   ConflictException,
   BadRequestException,
   NotFoundException,
+  Optional,
+  Inject,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { SyncLog, SyncStatus } from './entities/sync-log.entity';
-import {
-  SyncAttempt,
-  SyncAttemptStatus,
-  SyncTriggerSource,
-} from './entities/sync-attempt.entity';
+import { SyncAttempt, SyncAttemptStatus, SyncTriggerSource } from './entities/sync-attempt.entity';
 import { OrderService } from '../orders/order.service';
 import { isRetryableError, computeExponentialBackoffSeconds } from './sync-retry.service';
+import { ShutdownDrainService } from '../../common/services/shutdown-drain.service';
 
 function extractFirstRow<T = any>(queryResult: any): T {
   const rows =
@@ -30,6 +29,9 @@ export class SyncService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly orderService: OrderService,
+    @Optional()
+    @Inject(ShutdownDrainService)
+    private readonly shutdownDrainService?: ShutdownDrainService,
   ) {}
 
   /**
@@ -120,35 +122,38 @@ export class SyncService {
       return existingStateResult;
     }
 
-    // --------------------------------------------------------------------------
-    // Phase A.2 — Claim Transaction (Claim TX)
-    // --------------------------------------------------------------------------
-    const claimQr = this.dataSource.createQueryRunner();
-    await claimQr.connect();
-    await claimQr.startTransaction();
-
-    let claimedLeaseToken = randomUUID();
-    let claimSuccess = false;
-    let claimedLog: any = null;
+    this.shutdownDrainService?.startWorkerJob(syncLogId, 'Phase A.2 — Claim TX');
 
     try {
-      await claimQr.query(`SET LOCAL app.current_tenant_id = '${tenantId}';`);
+      // --------------------------------------------------------------------------
+      // Phase A.2 — Claim Transaction (Claim TX)
+      // --------------------------------------------------------------------------
+      const claimQr = this.dataSource.createQueryRunner();
+      await claimQr.connect();
+      await claimQr.startTransaction();
 
-      const lockedLogRows = await claimQr.query(
-        `SELECT * FROM sync_logs WHERE tenant_id = $1 AND id = $2 FOR UPDATE;`,
-        [tenantId, syncLogId],
-      );
-      const lockedLog = extractFirstRow(lockedLogRows);
+      let claimedLeaseToken = randomUUID();
+      let claimSuccess = false;
+      let claimedLog: any = null;
 
-      if (!lockedLog || lockedLog.status !== SyncStatus.PENDING) {
-        // Another worker claimed it
-        await claimQr.commitTransaction();
-        return { status: 202, syncLog: lockedLog };
-      }
+      try {
+        await claimQr.query(`SET LOCAL app.current_tenant_id = '${tenantId}';`);
 
-      // Transition to PROCESSING, increment attempt_count = 1
-      await claimQr.query(
-        `
+        const lockedLogRows = await claimQr.query(
+          `SELECT * FROM sync_logs WHERE tenant_id = $1 AND id = $2 FOR UPDATE;`,
+          [tenantId, syncLogId],
+        );
+        const lockedLog = extractFirstRow(lockedLogRows);
+
+        if (!lockedLog || lockedLog.status !== SyncStatus.PENDING) {
+          // Another worker claimed it
+          await claimQr.commitTransaction();
+          return { status: 202, syncLog: lockedLog };
+        }
+
+        // Transition to PROCESSING, increment attempt_count = 1
+        await claimQr.query(
+          `
         UPDATE sync_logs
         SET status = 'PROCESSING',
             attempt_count = 1,
@@ -162,92 +167,90 @@ export class SyncService {
             updated_at = CURRENT_TIMESTAMP
         WHERE tenant_id = $2 AND id = $3;
         `,
-        [claimedLeaseToken, tenantId, syncLogId],
-      );
+          [claimedLeaseToken, tenantId, syncLogId],
+        );
 
-      claimedLog = {
-        ...lockedLog,
-        status: SyncStatus.PROCESSING,
-        attempt_count: 1,
-        lease_token: claimedLeaseToken,
-        active_trigger_source: 'WEBHOOK',
-      };
+        claimedLog = {
+          ...lockedLog,
+          status: SyncStatus.PROCESSING,
+          attempt_count: 1,
+          lease_token: claimedLeaseToken,
+          active_trigger_source: 'WEBHOOK',
+        };
 
-      await claimQr.commitTransaction();
-      claimSuccess = true;
-    } catch (err) {
-      if (claimQr.isTransactionActive) {
-        await claimQr.rollbackTransaction();
-      }
-      throw err;
-    } finally {
-      await claimQr.release();
-    }
-
-    if (!claimSuccess) {
-      return { status: 202, syncLog: claimedLog };
-    }
-
-    // --------------------------------------------------------------------------
-    // Phase B — Domain Execution Transaction (Domain TX)
-    // --------------------------------------------------------------------------
-    const startTime = Date.now();
-    const domainQr = this.dataSource.createQueryRunner();
-    await domainQr.connect();
-    await domainQr.startTransaction();
-
-    let domainSucceeded = false;
-    let createdOrder: any = null;
-    let domainError: any = null;
-    let updatedSyncLog: any = null;
-
-    try {
-      await domainQr.query(`SET LOCAL app.current_tenant_id = '${tenantId}';`);
-
-      const logRows = await domainQr.query(
-        `SELECT * FROM sync_logs WHERE tenant_id = $1 AND id = $2 FOR UPDATE;`,
-        [tenantId, syncLogId],
-      );
-      const log = extractFirstRow(logRows);
-
-      if (
-        !log ||
-        log.status !== SyncStatus.PROCESSING ||
-        log.lease_token !== claimedLeaseToken
-      ) {
-        throw new Error('Lost processing lease before domain execution');
+        await claimQr.commitTransaction();
+        claimSuccess = true;
+      } catch (err) {
+        if (claimQr.isTransactionActive) {
+          await claimQr.rollbackTransaction();
+        }
+        throw err;
+      } finally {
+        await claimQr.release();
       }
 
-      // Execute order creation
-      const parsedPayload = typeof log.payload === 'string' ? JSON.parse(log.payload) : log.payload;
-      createdOrder = await this.orderService.create(tenantId, null, {
-        customer_id: parsedPayload.customer_id,
-        auto_allocate: true,
-        items: parsedPayload.items,
-      });
+      if (!claimSuccess) {
+        return { status: 202, syncLog: claimedLog };
+      }
 
-      // Insert SUCCEEDED SyncAttempt
-      const durationMs = Date.now() - startTime;
-      const attempt = domainQr.manager.create(SyncAttempt, {
-        tenant_id: tenantId,
-        sync_log_id: syncLogId,
-        attempt_number: 1,
-        lease_token: claimedLeaseToken,
-        trigger_source: SyncTriggerSource.WEBHOOK,
-        status: SyncAttemptStatus.SUCCEEDED,
-        pg_sqlstate: null,
-        http_status: null,
-        error_code: null,
-        error_message: null,
-        started_at: new Date(startTime),
-        finished_at: new Date(),
-        duration_ms: durationMs,
-      });
-      await domainQr.manager.save(SyncAttempt, attempt);
+      // --------------------------------------------------------------------------
+      // Phase B — Domain Execution Transaction (Domain TX)
+      // --------------------------------------------------------------------------
+      this.shutdownDrainService?.updateWorkerJobPhase(syncLogId, 'Phase B — Domain TX');
+      const startTime = Date.now();
+      const domainQr = this.dataSource.createQueryRunner();
+      await domainQr.connect();
+      await domainQr.startTransaction();
 
-      // Update SyncLog to SUCCEEDED
-      await domainQr.query(
-        `
+      let domainSucceeded = false;
+      let createdOrder: any = null;
+      let domainError: any = null;
+      let updatedSyncLog: any = null;
+
+      try {
+        await domainQr.query(`SET LOCAL app.current_tenant_id = '${tenantId}';`);
+
+        const logRows = await domainQr.query(
+          `SELECT * FROM sync_logs WHERE tenant_id = $1 AND id = $2 FOR UPDATE;`,
+          [tenantId, syncLogId],
+        );
+        const log = extractFirstRow(logRows);
+
+        if (!log || log.status !== SyncStatus.PROCESSING || log.lease_token !== claimedLeaseToken) {
+          throw new Error('Lost processing lease before domain execution');
+        }
+
+        // Execute order creation
+        const parsedPayload =
+          typeof log.payload === 'string' ? JSON.parse(log.payload) : log.payload;
+        createdOrder = await this.orderService.create(tenantId, null, {
+          customer_id: parsedPayload.customer_id,
+          auto_allocate: true,
+          items: parsedPayload.items,
+        });
+
+        // Insert SUCCEEDED SyncAttempt
+        const durationMs = Date.now() - startTime;
+        const attempt = domainQr.manager.create(SyncAttempt, {
+          tenant_id: tenantId,
+          sync_log_id: syncLogId,
+          attempt_number: 1,
+          lease_token: claimedLeaseToken,
+          trigger_source: SyncTriggerSource.WEBHOOK,
+          status: SyncAttemptStatus.SUCCEEDED,
+          pg_sqlstate: null,
+          http_status: null,
+          error_code: null,
+          error_message: null,
+          started_at: new Date(startTime),
+          finished_at: new Date(),
+          duration_ms: durationMs,
+        });
+        await domainQr.manager.save(SyncAttempt, attempt);
+
+        // Update SyncLog to SUCCEEDED
+        await domainQr.query(
+          `
         UPDATE sync_logs
         SET status = 'SUCCEEDED',
             order_id = $1,
@@ -259,87 +262,84 @@ export class SyncService {
             updated_at = CURRENT_TIMESTAMP
         WHERE tenant_id = $2 AND id = $3;
         `,
-        [createdOrder.id, tenantId, syncLogId],
-      );
+          [createdOrder.id, tenantId, syncLogId],
+        );
 
-      const refreshed = await domainQr.manager.findOne(SyncLog, {
-        where: { tenant_id: tenantId, id: syncLogId },
-      });
-      updatedSyncLog = refreshed;
+        const refreshed = await domainQr.manager.findOne(SyncLog, {
+          where: { tenant_id: tenantId, id: syncLogId },
+        });
+        updatedSyncLog = refreshed;
 
-      await domainQr.commitTransaction();
-      domainSucceeded = true;
-    } catch (err) {
-      domainError = err;
-      if (domainQr.isTransactionActive) {
-        await domainQr.rollbackTransaction();
+        await domainQr.commitTransaction();
+        domainSucceeded = true;
+      } catch (err) {
+        domainError = err;
+        if (domainQr.isTransactionActive) {
+          await domainQr.rollbackTransaction();
+        }
+      } finally {
+        await domainQr.release();
       }
-    } finally {
-      await domainQr.release();
-    }
 
-    if (domainSucceeded) {
-      return { status: 201, syncLog: updatedSyncLog, order: createdOrder };
-    }
+      if (domainSucceeded) {
+        return { status: 201, syncLog: updatedSyncLog, order: createdOrder };
+      }
 
-    // --------------------------------------------------------------------------
-    // Phase C — Failure Persistence Transaction (Failure TX)
-    // --------------------------------------------------------------------------
-    const failQr = this.dataSource.createQueryRunner();
-    await failQr.connect();
-    await failQr.startTransaction();
+      // --------------------------------------------------------------------------
+      // Phase C — Failure Persistence Transaction (Failure TX)
+      // --------------------------------------------------------------------------
+      this.shutdownDrainService?.updateWorkerJobPhase(syncLogId, 'Phase C — Failure TX');
+      const failQr = this.dataSource.createQueryRunner();
+      await failQr.connect();
+      await failQr.startTransaction();
 
-    let finalSyncLog: any = null;
-    let isRetryable = false;
-    let errorCode = 'SYNC_FAILED';
-    let errorMessage = 'Domain execution failed';
+      let finalSyncLog: any = null;
+      let isRetryable = false;
+      let errorCode = 'SYNC_FAILED';
+      let errorMessage = 'Domain execution failed';
 
-    try {
-      await failQr.query(`SET LOCAL app.current_tenant_id = '${tenantId}';`);
+      try {
+        await failQr.query(`SET LOCAL app.current_tenant_id = '${tenantId}';`);
 
-      const logRows = await failQr.query(
-        `SELECT * FROM sync_logs WHERE tenant_id = $1 AND id = $2 FOR UPDATE;`,
-        [tenantId, syncLogId],
-      );
-      const log = extractFirstRow(logRows);
+        const logRows = await failQr.query(
+          `SELECT * FROM sync_logs WHERE tenant_id = $1 AND id = $2 FOR UPDATE;`,
+          [tenantId, syncLogId],
+        );
+        const log = extractFirstRow(logRows);
 
-      if (
-        log &&
-        log.status === SyncStatus.PROCESSING &&
-        log.lease_token === claimedLeaseToken
-      ) {
-        const durationMs = Date.now() - startTime;
-        isRetryable = isRetryableError(domainError);
-        errorCode =
-          domainError?.response?.error_code ||
-          domainError?.error_code ||
-          (isRetryable ? 'DB_LOCK_TIMEOUT' : 'DOMAIN_FAILURE');
-        errorMessage = domainError?.message || 'Sync processing failed';
-        const pgSqlstate = domainError?.code || null;
-        const httpStatus = domainError?.status || domainError?.response?.statusCode || null;
+        if (log && log.status === SyncStatus.PROCESSING && log.lease_token === claimedLeaseToken) {
+          const durationMs = Date.now() - startTime;
+          isRetryable = isRetryableError(domainError);
+          errorCode =
+            domainError?.response?.error_code ||
+            domainError?.error_code ||
+            (isRetryable ? 'DB_LOCK_TIMEOUT' : 'DOMAIN_FAILURE');
+          errorMessage = domainError?.message || 'Sync processing failed';
+          const pgSqlstate = domainError?.code || null;
+          const httpStatus = domainError?.status || domainError?.response?.statusCode || null;
 
-        if (isRetryable) {
-          const delaySec = computeExponentialBackoffSeconds(1);
+          if (isRetryable) {
+            const delaySec = computeExponentialBackoffSeconds(1);
 
-          const attempt = failQr.manager.create(SyncAttempt, {
-            tenant_id: tenantId,
-            sync_log_id: syncLogId,
-            attempt_number: 1,
-            lease_token: claimedLeaseToken,
-            trigger_source: SyncTriggerSource.WEBHOOK,
-            status: SyncAttemptStatus.FAILED_RETRYABLE,
-            pg_sqlstate: pgSqlstate,
-            http_status: httpStatus,
-            error_code: errorCode,
-            error_message: errorMessage,
-            started_at: new Date(startTime),
-            finished_at: new Date(),
-            duration_ms: durationMs,
-          });
-          await failQr.manager.save(SyncAttempt, attempt);
+            const attempt = failQr.manager.create(SyncAttempt, {
+              tenant_id: tenantId,
+              sync_log_id: syncLogId,
+              attempt_number: 1,
+              lease_token: claimedLeaseToken,
+              trigger_source: SyncTriggerSource.WEBHOOK,
+              status: SyncAttemptStatus.FAILED_RETRYABLE,
+              pg_sqlstate: pgSqlstate,
+              http_status: httpStatus,
+              error_code: errorCode,
+              error_message: errorMessage,
+              started_at: new Date(startTime),
+              finished_at: new Date(),
+              duration_ms: durationMs,
+            });
+            await failQr.manager.save(SyncAttempt, attempt);
 
-          await failQr.query(
-            `
+            await failQr.query(
+              `
             UPDATE sync_logs
             SET status = 'RETRY_SCHEDULED',
                 next_retry_at = CURRENT_TIMESTAMP + ($1 || ' seconds')::INTERVAL,
@@ -355,29 +355,29 @@ export class SyncService {
                 updated_at = CURRENT_TIMESTAMP
             WHERE tenant_id = $6 AND id = $7;
             `,
-            [delaySec, pgSqlstate, httpStatus, errorCode, errorMessage, tenantId, syncLogId],
-          );
-        } else {
-          // Permanent failure
-          const attempt = failQr.manager.create(SyncAttempt, {
-            tenant_id: tenantId,
-            sync_log_id: syncLogId,
-            attempt_number: 1,
-            lease_token: claimedLeaseToken,
-            trigger_source: SyncTriggerSource.WEBHOOK,
-            status: SyncAttemptStatus.FAILED_PERMANENT,
-            pg_sqlstate: pgSqlstate,
-            http_status: httpStatus,
-            error_code: errorCode,
-            error_message: errorMessage,
-            started_at: new Date(startTime),
-            finished_at: new Date(),
-            duration_ms: durationMs,
-          });
-          await failQr.manager.save(SyncAttempt, attempt);
+              [delaySec, pgSqlstate, httpStatus, errorCode, errorMessage, tenantId, syncLogId],
+            );
+          } else {
+            // Permanent failure
+            const attempt = failQr.manager.create(SyncAttempt, {
+              tenant_id: tenantId,
+              sync_log_id: syncLogId,
+              attempt_number: 1,
+              lease_token: claimedLeaseToken,
+              trigger_source: SyncTriggerSource.WEBHOOK,
+              status: SyncAttemptStatus.FAILED_PERMANENT,
+              pg_sqlstate: pgSqlstate,
+              http_status: httpStatus,
+              error_code: errorCode,
+              error_message: errorMessage,
+              started_at: new Date(startTime),
+              finished_at: new Date(),
+              duration_ms: durationMs,
+            });
+            await failQr.manager.save(SyncAttempt, attempt);
 
-          await failQr.query(
-            `
+            await failQr.query(
+              `
             UPDATE sync_logs
             SET status = 'FAILED_PERMANENT',
                 next_retry_at = NULL,
@@ -393,45 +393,48 @@ export class SyncService {
                 updated_at = CURRENT_TIMESTAMP
             WHERE tenant_id = $5 AND id = $6;
             `,
-            [pgSqlstate, httpStatus, errorCode, errorMessage, tenantId, syncLogId],
-          );
+              [pgSqlstate, httpStatus, errorCode, errorMessage, tenantId, syncLogId],
+            );
+          }
+
+          finalSyncLog = await failQr.manager.findOne(SyncLog, {
+            where: { tenant_id: tenantId, id: syncLogId },
+          });
         }
 
-        finalSyncLog = await failQr.manager.findOne(SyncLog, {
-          where: { tenant_id: tenantId, id: syncLogId },
-        });
+        await failQr.commitTransaction();
+      } catch (err) {
+        if (failQr.isTransactionActive) {
+          await failQr.rollbackTransaction();
+        }
+        throw err;
+      } finally {
+        await failQr.release();
       }
 
-      await failQr.commitTransaction();
-    } catch (err) {
-      if (failQr.isTransactionActive) {
-        await failQr.rollbackTransaction();
+      if (isRetryable) {
+        return { status: 202, syncLog: finalSyncLog };
       }
-      throw err;
+
+      // Re-throw permanent failure with original status
+      if (domainError instanceof ConflictException) {
+        throw domainError;
+      }
+      if (domainError instanceof BadRequestException) {
+        throw domainError;
+      }
+      if (domainError instanceof NotFoundException) {
+        throw domainError;
+      }
+
+      throw new ConflictException({
+        statusCode: 409,
+        error_code: errorCode,
+        message: errorMessage,
+        sync_log_id: syncLogId,
+      });
     } finally {
-      await failQr.release();
+      this.shutdownDrainService?.finishWorkerJob(syncLogId);
     }
-
-    if (isRetryable) {
-      return { status: 202, syncLog: finalSyncLog };
-    }
-
-    // Re-throw permanent failure with original status
-    if (domainError instanceof ConflictException) {
-      throw domainError;
-    }
-    if (domainError instanceof BadRequestException) {
-      throw domainError;
-    }
-    if (domainError instanceof NotFoundException) {
-      throw domainError;
-    }
-
-    throw new ConflictException({
-      statusCode: 409,
-      error_code: errorCode,
-      message: errorMessage,
-      sync_log_id: syncLogId,
-    });
   }
 }

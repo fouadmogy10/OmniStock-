@@ -39,4 +39,3 @@ export class StockTransfer extends BaseTenantEntity {
   // Populated in queries with items
   items?: StockTransferItem[];
 }
-

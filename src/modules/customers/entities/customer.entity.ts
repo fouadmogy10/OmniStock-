@@ -12,4 +12,3 @@ export class Customer extends BaseTenantEntity {
   @Column({ type: 'varchar', length: 50, nullable: true })
   phone?: string | null;
 }
-

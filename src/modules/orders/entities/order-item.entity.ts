@@ -1,9 +1,4 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
 import { OrderAllocation } from './order-allocation.entity';
 
 @Entity('order_items')
@@ -41,4 +36,3 @@ export class OrderItem {
   sku?: string;
   allocations?: OrderAllocation[];
 }
-

@@ -1,0 +1,234 @@
+{
+  "info": {
+    "_postman_id": "c7a8b9c0-d1e2-4f3a-9b8c-7d6e5f4a3b2c",
+    "name": "OmniStock - Phase 7 (Operational Readiness & Health Probes)",
+    "description": "Smoke test collection for Phase 7: Health probes, Swagger OpenAPI documentation, correlation IDs, and validation error envelopes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Health Probes",
+      "item": [
+        {
+          "name": "1.1 GET /health/live - Liveness Probe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response body status is 'ok'\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql(\"ok\");",
+                  "});",
+                  "",
+                  "pm.test(\"Echoes X-Request-Id response header\", function () {",
+                  "    var reqId = pm.response.headers.get(\"X-Request-Id\");",
+                  "    pm.expect(reqId).to.eql(\"phase7-live-req-001\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "phase7-live-req-001",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/live",
+              "host": ["{{baseUrl}}"],
+              "path": ["health", "live"]
+            }
+          }
+        },
+        {
+          "name": "1.2 GET /health/ready - Readiness Probe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response body status is 'ready'\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql(\"ready\");",
+                  "});",
+                  "",
+                  "pm.test(\"Has X-Request-Id header\", function () {",
+                  "    pm.expect(pm.response.headers.has(\"X-Request-Id\")).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health/ready",
+              "host": ["{{baseUrl}}"],
+              "path": ["health", "ready"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. OpenAPI / Swagger Documentation",
+      "item": [
+        {
+          "name": "2.1 GET /api/docs - Swagger UI HTML",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"HTML contains Swagger UI markup\", function () {",
+                  "    var html = pm.response.text();",
+                  "    pm.expect(html).to.include(\"Swagger UI\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/docs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "docs"]
+            }
+          }
+        },
+        {
+          "name": "2.2 GET /api/docs-json - OpenAPI 3.0 Specification JSON",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Spec title is 'OmniStock API' and version is '1.0.0'\", function () {",
+                  "    var spec = pm.response.json();",
+                  "    pm.expect(spec.openapi).to.match(/^3\\./);",
+                  "    pm.expect(spec.info.title).to.eql(\"OmniStock API\");",
+                  "    pm.expect(spec.info.version).to.eql(\"1.0.0\");",
+                  "});",
+                  "",
+                  "pm.test(\"Spec includes BearerAuth / bearer-jwt security scheme\", function () {",
+                  "    var spec = pm.response.json();",
+                  "    var auth = spec.components.securitySchemes['bearer-jwt'] || spec.components.securitySchemes['BearerAuth'];",
+                  "    pm.expect(auth).to.exist;",
+                  "    pm.expect(auth.type).to.eql(\"http\");",
+                  "    pm.expect(auth.scheme).to.eql(\"bearer\");",
+                  "});",
+                  "",
+                  "pm.test(\"Spec documents health and v1 endpoints\", function () {",
+                  "    var spec = pm.response.json();",
+                  "    pm.expect(spec.paths).to.have.property(\"/health/live\");",
+                  "    pm.expect(spec.paths).to.have.property(\"/health/ready\");",
+                  "    pm.expect(spec.paths).to.have.property(\"/tenants\");",
+                  "    pm.expect(spec.paths).to.have.property(\"/auth/login\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/docs-json",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "docs-json"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Error Envelope & Request Correlation",
+      "item": [
+        {
+          "name": "3.1 POST /tenants - Strict Validation Rejection Envelope",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Canonical error envelope fields exist\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.statusCode).to.eql(400);",
+                  "    pm.expect(json.error_code).to.eql(\"VALIDATION_ERROR\");",
+                  "    pm.expect(json).to.have.property(\"message\");",
+                  "    pm.expect(json).to.have.property(\"request_id\");",
+                  "    pm.expect(json).to.have.property(\"timestamp\");",
+                  "});",
+                  "",
+                  "pm.test(\"Echoes incoming valid X-Request-Id header\", function () {",
+                  "    var reqId = pm.response.headers.get(\"X-Request-Id\");",
+                  "    pm.expect(reqId).to.eql(\"phase7-err-envelope-001\");",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.request_id).to.eql(\"phase7-err-envelope-001\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "phase7-err-envelope-001",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"non_whitelisted_field\": \"malicious_or_unexpected\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

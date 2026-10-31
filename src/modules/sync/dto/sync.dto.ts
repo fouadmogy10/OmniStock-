@@ -9,4 +9,3 @@ export interface FindSyncLogsQuery {
   page?: number;
   limit?: number;
 }
-

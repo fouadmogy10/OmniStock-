@@ -43,4 +43,3 @@ export class Order extends BaseTenantEntity {
   // Populated in queries with items
   items?: OrderItem[];
 }
-

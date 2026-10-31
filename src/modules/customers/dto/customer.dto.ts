@@ -42,4 +42,3 @@ export interface FindCustomersQuery {
   page?: number;
   limit?: number;
 }
-

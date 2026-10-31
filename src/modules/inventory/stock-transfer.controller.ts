@@ -31,10 +31,7 @@ export class StockTransferController {
   @Post(':id/dispatch')
   @RequirePermissions(Permission.TRANSFERS_EXECUTE)
   @HttpCode(HttpStatus.OK)
-  async dispatchTransfer(
-    @Req() req: any,
-    @Param('id', new ParseUUIDPipe()) id: string,
-  ) {
+  async dispatchTransfer(@Req() req: any, @Param('id', new ParseUUIDPipe()) id: string) {
     const tenantId = req.authenticatedUser.tenant_id;
     const actorUserId = req.authenticatedUser.id;
     return await this.transferService.dispatch(tenantId, actorUserId, id);
@@ -43,10 +40,7 @@ export class StockTransferController {
   @Post(':id/receive')
   @RequirePermissions(Permission.TRANSFERS_EXECUTE)
   @HttpCode(HttpStatus.OK)
-  async receiveTransfer(
-    @Req() req: any,
-    @Param('id', new ParseUUIDPipe()) id: string,
-  ) {
+  async receiveTransfer(@Req() req: any, @Param('id', new ParseUUIDPipe()) id: string) {
     const tenantId = req.authenticatedUser.tenant_id;
     const actorUserId = req.authenticatedUser.id;
     return await this.transferService.receive(tenantId, actorUserId, id);
@@ -55,10 +49,7 @@ export class StockTransferController {
   @Post(':id/cancel')
   @RequirePermissions(Permission.TRANSFERS_WRITE)
   @HttpCode(HttpStatus.OK)
-  async cancelTransfer(
-    @Req() req: any,
-    @Param('id', new ParseUUIDPipe()) id: string,
-  ) {
+  async cancelTransfer(@Req() req: any, @Param('id', new ParseUUIDPipe()) id: string) {
     const tenantId = req.authenticatedUser.tenant_id;
     const actorUserId = req.authenticatedUser.id;
     return await this.transferService.cancel(tenantId, actorUserId, id);
@@ -86,12 +77,8 @@ export class StockTransferController {
 
   @Get(':id')
   @RequirePermissions(Permission.TRANSFERS_READ)
-  async getTransferById(
-    @Req() req: any,
-    @Param('id', new ParseUUIDPipe()) id: string,
-  ) {
+  async getTransferById(@Req() req: any, @Param('id', new ParseUUIDPipe()) id: string) {
     const tenantId = req.authenticatedUser.tenant_id;
     return await this.transferService.getTransferById(tenantId, id);
   }
 }
-

@@ -472,10 +472,7 @@ export class OrderService {
         });
       }
 
-      if (
-        rawOrder.status !== OrderStatus.DRAFT &&
-        rawOrder.status !== OrderStatus.PENDING
-      ) {
+      if (rawOrder.status !== OrderStatus.DRAFT && rawOrder.status !== OrderStatus.PENDING) {
         throw new ConflictException({
           statusCode: 409,
           error_code: 'INVALID_ORDER_TRANSITION',
@@ -664,10 +661,7 @@ export class OrderService {
         });
       }
 
-      if (
-        rawOrder.status === OrderStatus.SHIPPED ||
-        rawOrder.status === OrderStatus.CANCELLED
-      ) {
+      if (rawOrder.status === OrderStatus.SHIPPED || rawOrder.status === OrderStatus.CANCELLED) {
         throw new ConflictException({
           statusCode: 409,
           error_code: 'INVALID_ORDER_TRANSITION',
@@ -896,4 +890,3 @@ export class OrderService {
     }
   }
 }
-

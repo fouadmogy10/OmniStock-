@@ -204,7 +204,10 @@ export class WarehouseService {
           action: 'WAREHOUSE_UPDATED',
           entityType: 'Warehouse',
           entityId: id,
-          metadata: { previous: { name: target.name, is_active: target.is_active }, updated: { name: newName, is_active: newIsActive } },
+          metadata: {
+            previous: { name: target.name, is_active: target.is_active },
+            updated: { name: newName, is_active: newIsActive },
+          },
         },
         qr.manager,
       );

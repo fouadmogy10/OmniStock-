@@ -1,9 +1,4 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
 
 export enum SyncAttemptStatus {
   SUCCEEDED = 'SUCCEEDED',
@@ -61,4 +56,3 @@ export class SyncAttempt {
   @Column({ type: 'int', default: 0 })
   duration_ms!: number;
 }
-

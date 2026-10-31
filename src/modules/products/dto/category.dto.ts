@@ -20,4 +20,3 @@ export class UpdateCategoryDto {
   @IsString()
   description?: string;
 }
-

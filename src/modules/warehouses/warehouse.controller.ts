@@ -46,4 +46,3 @@ export class WarehouseController {
     return await this.warehouseService.updateWarehouse(tenantId, actorUserId, id, dto);
   }
 }
-

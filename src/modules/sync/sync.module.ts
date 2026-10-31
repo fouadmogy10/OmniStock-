@@ -26,12 +26,6 @@ import { AuditModule } from '../audit/audit.module';
     SyncRetryWorker,
     WebhookSignatureGuard,
   ],
-  exports: [
-    SyncCredentialService,
-    SyncService,
-    SyncRetryService,
-    SyncRetryWorker,
-  ],
+  exports: [SyncCredentialService, SyncService, SyncRetryService, SyncRetryWorker],
 })
 export class SyncModule {}
-

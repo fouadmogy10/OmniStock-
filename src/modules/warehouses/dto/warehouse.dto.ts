@@ -1,11 +1,4 @@
-import {
-  IsBoolean,
-  IsInt,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  Min,
-} from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateWarehouseDto {
   @IsNotEmpty()
@@ -45,4 +38,3 @@ export class UpdateWarehouseDto {
   @IsBoolean()
   is_active?: boolean;
 }
-

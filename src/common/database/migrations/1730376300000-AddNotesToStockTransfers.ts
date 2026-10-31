@@ -17,4 +17,3 @@ export class AddNotesToStockTransfers1730376300000 implements MigrationInterface
     `);
   }
 }
-

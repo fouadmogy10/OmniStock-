@@ -207,10 +207,7 @@ describe('LowStockAlert Lifecycle & Movements Integration Tests (T061)', () => {
     await qr.connect();
     await qr.startTransaction();
     await qr.query(`SET LOCAL app.current_tenant_id = '${tenantId}';`);
-    await qr.query(
-      `UPDATE inventory_items SET reserved = 8 WHERE id = $1;`,
-      [inventoryItemId],
-    );
+    await qr.query(`UPDATE inventory_items SET reserved = 8 WHERE id = $1;`, [inventoryItemId]);
     await qr.commitTransaction();
     await qr.release();
 
@@ -235,10 +232,7 @@ describe('LowStockAlert Lifecycle & Movements Integration Tests (T061)', () => {
     await qr2.connect();
     await qr2.startTransaction();
     await qr2.query(`SET LOCAL app.current_tenant_id = '${tenantId}';`);
-    await qr2.query(
-      `UPDATE inventory_items SET reserved = 0 WHERE id = $1;`,
-      [inventoryItemId],
-    );
+    await qr2.query(`UPDATE inventory_items SET reserved = 0 WHERE id = $1;`, [inventoryItemId]);
     await qr2.commitTransaction();
     await qr2.release();
   });
@@ -270,9 +264,7 @@ describe('LowStockAlert Lifecycle & Movements Integration Tests (T061)', () => {
       expect(alerts.length).toBeGreaterThanOrEqual(1);
 
       // Verify ON DELETE RESTRICT on product: deleting product with alerts is rejected by DB constraint
-      await expect(
-        qr.query(`DELETE FROM products WHERE id = $1;`, [productId]),
-      ).rejects.toThrow();
+      await expect(qr.query(`DELETE FROM products WHERE id = $1;`, [productId])).rejects.toThrow();
 
       // Verify ON DELETE RESTRICT on warehouse: deleting warehouse with alerts is rejected by DB constraint
       await expect(
@@ -313,4 +305,3 @@ describe('LowStockAlert Lifecycle & Movements Integration Tests (T061)', () => {
     expect(returnMovRes.body.total).toBe(0);
   });
 });
-

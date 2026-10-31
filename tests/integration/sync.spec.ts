@@ -434,7 +434,10 @@ describe('Sync & Webhook Authentication Integration Tests (T033)', () => {
           [
             tenantAId,
             `RETRY-TEST-${timestamp}`,
-            JSON.stringify({ customer_id: customerId, items: [{ product_id: productId, quantity: 1 }] }),
+            JSON.stringify({
+              customer_id: customerId,
+              items: [{ product_id: productId, quantity: 1 }],
+            }),
           ],
         );
         retryScheduledLogId = res[0].id;

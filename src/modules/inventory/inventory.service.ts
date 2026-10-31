@@ -10,7 +10,10 @@ import { StockMovement, StockMovementType } from './entities/stock-movement.enti
 import { LowStockAlertService } from './low-stock-alert.service';
 import { AuditLogService } from '../audit/audit.service';
 import { InventoryRepository, FindInventoryLevelsQuery } from './repositories/inventory.repository';
-import { StockMovementRepository, FindMovementsQuery } from './repositories/stock-movement.repository';
+import {
+  StockMovementRepository,
+  FindMovementsQuery,
+} from './repositories/stock-movement.repository';
 import { AdjustStockDto } from './dto/inventory.dto';
 
 @Injectable()
@@ -23,11 +26,7 @@ export class InventoryService {
     private readonly auditLogService: AuditLogService,
   ) {}
 
-  async adjustStock(
-    tenantId: string,
-    actorUserId: string,
-    dto: AdjustStockDto,
-  ): Promise<any> {
+  async adjustStock(tenantId: string, actorUserId: string, dto: AdjustStockDto): Promise<any> {
     if (dto.delta === 0) {
       throw new BadRequestException({
         statusCode: 400,
@@ -131,11 +130,12 @@ export class InventoryService {
           [newOnHand, existingItem.id, tenantId],
         );
 
-        const rows = Array.isArray(updateResult) && Array.isArray(updateResult[0])
-          ? updateResult[0]
-          : Array.isArray(updateResult)
-            ? updateResult
-            : [updateResult];
+        const rows =
+          Array.isArray(updateResult) && Array.isArray(updateResult[0])
+            ? updateResult[0]
+            : Array.isArray(updateResult)
+              ? updateResult
+              : [updateResult];
 
         item = qr.manager.create(InventoryItem, rows[0]);
       }
@@ -228,11 +228,12 @@ export class InventoryService {
         [newThreshold, itemId, tenantId],
       );
 
-      const rows = Array.isArray(updateResult) && Array.isArray(updateResult[0])
-        ? updateResult[0]
-        : Array.isArray(updateResult)
-          ? updateResult
-          : [updateResult];
+      const rows =
+        Array.isArray(updateResult) && Array.isArray(updateResult[0])
+          ? updateResult[0]
+          : Array.isArray(updateResult)
+            ? updateResult
+            : [updateResult];
 
       const item = qr.manager.create(InventoryItem, rows[0]);
 

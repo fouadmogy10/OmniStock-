@@ -139,7 +139,11 @@ export class ProductService {
           action: 'PRODUCT_CREATED',
           entityType: 'Product',
           entityId: saved.id,
-          metadata: { sku: saved.sku, name: saved.name, is_variant_parent: saved.is_variant_parent },
+          metadata: {
+            sku: saved.sku,
+            name: saved.name,
+            is_variant_parent: saved.is_variant_parent,
+          },
         },
         qr.manager,
       );
@@ -315,7 +319,11 @@ export class ProductService {
       }
 
       // Category validation
-      if (dto.category_id !== undefined && dto.category_id !== null && dto.category_id !== target.category_id) {
+      if (
+        dto.category_id !== undefined &&
+        dto.category_id !== null &&
+        dto.category_id !== target.category_id
+      ) {
         const [category] = await qr.query(
           `SELECT id FROM categories WHERE tenant_id = $1 AND id = $2;`,
           [tenantId, dto.category_id],

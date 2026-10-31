@@ -200,18 +200,18 @@ describe('Inventory & StockMovement Immutability Integration Tests (T023)', () =
 
       // UPDATE must fail at the trigger level
       await expect(
-        qr.query(
-          `UPDATE stock_movements SET delta = 999 WHERE id = $1 AND tenant_id = $2;`,
-          [movementId, tenantId],
-        ),
+        qr.query(`UPDATE stock_movements SET delta = 999 WHERE id = $1 AND tenant_id = $2;`, [
+          movementId,
+          tenantId,
+        ]),
       ).rejects.toThrow();
 
       // DELETE must fail at the trigger level
       await expect(
-        qr.query(
-          `DELETE FROM stock_movements WHERE id = $1 AND tenant_id = $2;`,
-          [movementId, tenantId],
-        ),
+        qr.query(`DELETE FROM stock_movements WHERE id = $1 AND tenant_id = $2;`, [
+          movementId,
+          tenantId,
+        ]),
       ).rejects.toThrow();
 
       await qr.rollbackTransaction();
@@ -247,7 +247,9 @@ describe('Inventory & StockMovement Immutability Integration Tests (T023)', () =
 
       // chk_inventory_reserved_lte_on_hand: reserved > on_hand rejected
       await expect(
-        qr.query(`UPDATE inventory_items SET reserved = 999, on_hand = 10 WHERE id = $1;`, [item.id]),
+        qr.query(`UPDATE inventory_items SET reserved = 999, on_hand = 10 WHERE id = $1;`, [
+          item.id,
+        ]),
       ).rejects.toThrow();
 
       // chk_inventory_in_transit_non_negative: in_transit < 0 rejected
@@ -266,4 +268,3 @@ describe('Inventory & StockMovement Immutability Integration Tests (T023)', () =
     }
   });
 });
-

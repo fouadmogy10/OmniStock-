@@ -46,4 +46,3 @@ export class UpdateThresholdDto {
   @Min(0)
   low_stock_threshold?: number | null;
 }
-

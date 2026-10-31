@@ -64,4 +64,3 @@ export class CustomerController {
     return await this.customerService.updateCustomer(tenantId, actorUserId, id, dto);
   }
 }
-

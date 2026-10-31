@@ -96,4 +96,3 @@ export class SyncLog {
   // Populated in queries
   attempts?: SyncAttempt[];
 }
-

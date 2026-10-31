@@ -87,4 +87,3 @@ export class UpdateProductDto {
   @IsBoolean()
   is_variant_parent?: boolean;
 }
-

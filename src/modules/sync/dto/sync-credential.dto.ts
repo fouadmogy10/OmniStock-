@@ -6,4 +6,3 @@ export class CreateSyncCredentialDto {
   @MaxLength(50)
   source!: string;
 }
-

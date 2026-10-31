@@ -31,7 +31,8 @@ export class LowStockAlertService {
   ): Promise<LowStockAlert | null> {
     const manager = em || this.dataSource.manager;
     const available = (item.on_hand ?? 0) - (item.reserved ?? 0);
-    const hasThreshold = item.low_stock_threshold !== null && item.low_stock_threshold !== undefined;
+    const hasThreshold =
+      item.low_stock_threshold !== null && item.low_stock_threshold !== undefined;
 
     // Check for existing OPEN alert
     const existingOpenAlert = await manager.findOne(LowStockAlert, {

@@ -407,9 +407,7 @@ describe('Dashboard Integration Tests (T065)', () => {
     });
 
     it('rejects unauthenticated requests with 401 Unauthorized', async () => {
-      await request(app.getHttpServer())
-        .get('/dashboard/summary')
-        .expect(401);
+      await request(app.getHttpServer()).get('/dashboard/summary').expect(401);
     });
   });
 });

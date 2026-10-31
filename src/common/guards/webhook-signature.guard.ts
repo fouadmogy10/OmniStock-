@@ -11,6 +11,7 @@ import { SyncCredentialService } from '../../modules/sync/sync-credential.servic
 import { AuditLogService } from '../../modules/audit/audit.service';
 import { Tenant } from '../../modules/tenant/entities/tenant.entity';
 import { SyncWebhookCredential } from '../../modules/sync/entities/sync-webhook-credential.entity';
+import { RateLimiterService } from '../services/rate-limiter.service';
 
 @Injectable()
 export class WebhookSignatureGuard implements CanActivate {
@@ -20,6 +21,7 @@ export class WebhookSignatureGuard implements CanActivate {
     private readonly dataSource: DataSource,
     private readonly syncCredentialService: SyncCredentialService,
     private readonly auditLogService: AuditLogService,
+    private readonly rateLimiterService?: RateLimiterService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -228,6 +230,15 @@ export class WebhookSignatureGuard implements CanActivate {
       });
     }
 
+    // 9. Tier 2 Post-HMAC Authenticated Tenant Rate Limit
+    if (this.rateLimiterService) {
+      const res = context.switchToHttp().getResponse();
+      const maxTenant = parseInt(process.env.RATE_LIMIT_WEBHOOK_TENANT_MAX || '120', 10);
+      const ttl = parseInt(process.env.RATE_LIMIT_TTL_SECONDS || '60', 10);
+      const tenantKey = `webhook:tenant:${tenant.id}:${source}`;
+      this.rateLimiterService.consumeOrThrow(tenantKey, maxTenant, ttl, res);
+    }
+
     // Attach verified tenant and context
     req.verifiedTenant = tenant;
     req.verifiedTenantId = tenant.id;
@@ -237,4 +248,3 @@ export class WebhookSignatureGuard implements CanActivate {
     return true;
   }
 }
-

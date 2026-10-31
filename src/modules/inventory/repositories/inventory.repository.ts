@@ -100,22 +100,26 @@ export class InventoryRepository {
       }
 
       return {
-        data: items.map((i) => (i.toJSON ? i.toJSON() : {
-          id: i.id,
-          tenant_id: i.tenant_id,
-          product_id: i.product_id,
-          warehouse_id: i.warehouse_id,
-          on_hand: Number(i.on_hand),
-          reserved: Number(i.reserved),
-          available: i.available,
-          in_transit: Number(i.in_transit),
-          low_stock_threshold:
-            i.low_stock_threshold !== null && i.low_stock_threshold !== undefined
-              ? Number(i.low_stock_threshold)
-              : null,
-          created_at: i.created_at,
-          updated_at: i.updated_at,
-        })),
+        data: items.map((i) =>
+          i.toJSON
+            ? i.toJSON()
+            : {
+                id: i.id,
+                tenant_id: i.tenant_id,
+                product_id: i.product_id,
+                warehouse_id: i.warehouse_id,
+                on_hand: Number(i.on_hand),
+                reserved: Number(i.reserved),
+                available: i.available,
+                in_transit: Number(i.in_transit),
+                low_stock_threshold:
+                  i.low_stock_threshold !== null && i.low_stock_threshold !== undefined
+                    ? Number(i.low_stock_threshold)
+                    : null,
+                created_at: i.created_at,
+                updated_at: i.updated_at,
+              },
+        ),
         total,
         page,
         limit,
