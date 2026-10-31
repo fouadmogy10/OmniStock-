@@ -1,0 +1,1035 @@
+{
+  "info": {
+    "_postman_id": "7f8b9c10-2345-4a67-89ab-cdef01234567",
+    "name": "OmniStock Phase 3 - Multi-Tenant Onboarding & Isolation",
+    "description": "Comprehensive automated API smoke and functional test suite for OmniStock MVP Phase 3 (Tenant Onboarding, Authentication, User Management, Audit Logs, RBAC, and Cross-Tenant Isolation).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Tenant Onboarding & Auth",
+      "item": [
+        {
+          "name": "01 - Onboard Tenant 1",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('tenantSlug', 'tenant-' + ts);",
+                  "pm.environment.set('adminEmail', 'admin-' + ts + '@test.com');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Response contains tenant and admin_user', function () {",
+                  "    pm.expect(jsonData).to.have.property('tenant');",
+                  "    pm.expect(jsonData).to.have.property('admin_user');",
+                  "    pm.expect(jsonData.tenant.slug).to.eql(pm.environment.get('tenantSlug'));",
+                  "    pm.expect(jsonData.admin_user.role).to.eql('ADMIN');",
+                  "    pm.expect(jsonData.admin_user.password_hash).to.be.undefined;",
+                  "});",
+                  "pm.environment.set('tenantId', jsonData.tenant.id);",
+                  "pm.environment.set('adminId', jsonData.admin_user.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"OmniStock Primary Tenant\",\n  \"slug\": \"{{tenantSlug}}\",\n  \"admin_email\": \"{{adminEmail}}\",\n  \"admin_password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants"]
+            }
+          }
+        },
+        {
+          "name": "02 - Login as Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Response has access_token and user info', function () {",
+                  "    pm.expect(jsonData).to.have.property('access_token');",
+                  "    pm.expect(jsonData).to.have.property('user');",
+                  "    pm.expect(jsonData.user.role).to.eql('ADMIN');",
+                  "    pm.expect(jsonData.user.tenant_id).to.eql(pm.environment.get('tenantId'));",
+                  "});",
+                  "pm.environment.set('adminToken', jsonData.access_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_slug\": \"{{tenantSlug}}\",\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "03 - Get Tenant Profile (GET /tenants/me)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Profile matches active tenant', function () {",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get('tenantId'));",
+                  "    pm.expect(jsonData.slug).to.eql(pm.environment.get('tenantSlug'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/tenants/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. User Management (CRUD & Roles)",
+      "item": [
+        {
+          "name": "04 - Create Manager User",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('managerEmail', 'manager-' + ts + '@test.com');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('User created with role MANAGER', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.role).to.eql('MANAGER');",
+                  "    pm.expect(jsonData.password_hash).to.be.undefined;",
+                  "});",
+                  "pm.environment.set('managerId', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{managerEmail}}\",\n  \"password\": \"{{managerPassword}}\",\n  \"role\": \"MANAGER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          }
+        },
+        {
+          "name": "05 - Login as Manager",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Manager login successful', function () {",
+                  "    pm.expect(jsonData.access_token).to.be.a('string');",
+                  "    pm.expect(jsonData.user.role).to.eql('MANAGER');",
+                  "});",
+                  "pm.environment.set('managerToken', jsonData.access_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_slug\": \"{{tenantSlug}}\",\n  \"email\": \"{{managerEmail}}\",\n  \"password\": \"{{managerPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "06 - Create Viewer User",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.environment.set('viewerEmail', 'viewer-' + ts + '@test.com');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('viewerId', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{viewerEmail}}\",\n  \"password\": \"{{viewerPassword}}\",\n  \"role\": \"VIEWER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          }
+        },
+        {
+          "name": "07 - List Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Returns paginated user list', function () {",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "    pm.expect(jsonData.total).to.be.at.least(3);",
+                  "    pm.expect(jsonData.page).to.eql(1);",
+                  "    pm.expect(jsonData.limit).to.eql(10);",
+                  "    jsonData.data.forEach(function (user) {",
+                  "        pm.expect(user.password_hash).to.be.undefined;",
+                  "        pm.expect(user.tenant_id).to.eql(pm.environment.get('tenantId'));",
+                  "    });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "08 - Get User By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('User ID and Role match expected', function () {",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get('managerId'));",
+                  "    pm.expect(jsonData.role).to.eql('MANAGER');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{managerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{managerId}}"]
+            }
+          }
+        },
+        {
+          "name": "09 - Update User Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Viewer promoted to MANAGER', function () {",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get('viewerId'));",
+                  "    pm.expect(jsonData.role).to.eql('MANAGER');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"MANAGER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{viewerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{viewerId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Audit Logs",
+      "item": [
+        {
+          "name": "10 - List Tenant Audit Logs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Returns tenant-scoped audit logs', function () {",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "    pm.expect(jsonData.total).to.be.at.least(1);",
+                  "    jsonData.data.forEach(function (log) {",
+                  "        pm.expect(log.tenant_id).to.eql(pm.environment.get('tenantId'));",
+                  "        pm.expect(log.tenant_id).not.to.be.null;",
+                  "    });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/audit-logs?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["audit-logs"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Cross-Tenant Isolation",
+      "item": [
+        {
+          "name": "11 - Onboard Tenant 2",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now() + 10;",
+                  "pm.environment.set('secondTenantSlug', 'tenant-sec-' + ts);",
+                  "pm.environment.set('secondAdminEmail', 'admin-sec-' + ts + '@test.com');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('secondTenantId', jsonData.tenant.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Second Isolated Tenant\",\n  \"slug\": \"{{secondTenantSlug}}\",\n  \"admin_email\": \"{{secondAdminEmail}}\",\n  \"admin_password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants"]
+            }
+          }
+        },
+        {
+          "name": "12 - Login Tenant 2 Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('secondAdminToken', jsonData.access_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_slug\": \"{{secondTenantSlug}}\",\n  \"email\": \"{{secondAdminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "13 - Create User in Tenant 2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.environment.set('secondUserId', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{secondAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user2@test.com\",\n  \"password\": \"UserPass123!\",\n  \"role\": \"MANAGER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          }
+        },
+        {
+          "name": "14 - Isolation: Tenant 1 Cannot Access Tenant 2 User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404 Not Found (invisible under RLS)', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is USER_NOT_FOUND', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('USER_NOT_FOUND');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{secondUserId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{secondUserId}}"]
+            }
+          }
+        },
+        {
+          "name": "15 - Isolation: Tenant 1 Cannot Update Tenant 2 User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is USER_NOT_FOUND', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('USER_NOT_FOUND');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"ADMIN\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{secondUserId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{secondUserId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Authorization & Negative Tests",
+      "item": [
+        {
+          "name": "16 - Negative: Access Protected Endpoint Without Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is AUTH_UNAUTHORIZED', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('AUTH_UNAUTHORIZED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tenants/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants", "me"]
+            }
+          }
+        },
+        {
+          "name": "17 - Negative: Access Protected Endpoint With Invalid Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is AUTH_UNAUTHORIZED', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('AUTH_UNAUTHORIZED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer malformed.invalid.token"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/tenants/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants", "me"]
+            }
+          }
+        },
+        {
+          "name": "18 - Negative: Insufficient Permissions (Manager Cannot Create User)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is INSUFFICIENT_PERMISSIONS', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('INSUFFICIENT_PERMISSIONS');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"manager_attempt@test.com\",\n  \"password\": \"Password123!\",\n  \"role\": \"VIEWER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          }
+        },
+        {
+          "name": "19 - Negative: Insufficient Permissions (Manager Cannot Read Audit Logs)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is INSUFFICIENT_PERMISSIONS', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('INSUFFICIENT_PERMISSIONS');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/audit-logs",
+              "host": ["{{baseUrl}}"],
+              "path": ["audit-logs"]
+            }
+          }
+        },
+        {
+          "name": "20 - Negative: Duplicate Tenant Slug",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is DUPLICATE_TENANT_SLUG', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('DUPLICATE_TENANT_SLUG');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Duplicate Tenant Name\",\n  \"slug\": \"{{tenantSlug}}\",\n  \"admin_email\": \"dup@test.com\",\n  \"admin_password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants"]
+            }
+          }
+        },
+        {
+          "name": "21 - Negative: Duplicate User Email in Tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is DUPLICATE_USER_EMAIL', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('DUPLICATE_USER_EMAIL');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{managerEmail}}\",\n  \"password\": \"Password123!\",\n  \"role\": \"VIEWER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          }
+        },
+        {
+          "name": "22 - Negative: Invalid DTO (Missing Password & Invalid Email)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is VALIDATION_ERROR', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"not-an-email\",\n  \"role\": \"VIEWER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          }
+        },
+        {
+          "name": "23 - Negative: Last Active Admin Protection (Demote Sole Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is LAST_ACTIVE_ADMIN_REQUIRED', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('LAST_ACTIVE_ADMIN_REQUIRED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"VIEWER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{adminId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{adminId}}"]
+            }
+          }
+        },
+        {
+          "name": "24 - Negative: Last Active Admin Protection (Deactivate Sole Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "pm.test('Error code is LAST_ACTIVE_ADMIN_REQUIRED', function () {",
+                  "    pm.expect(jsonData.error_code).to.eql('LAST_ACTIVE_ADMIN_REQUIRED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{adminId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{adminId}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+
